@@ -36,4 +36,12 @@ pub mod reputation {
     ) -> Result<()> {
         instructions::initialize_agent::handler(ctx, agent_uri, external_agent_id)
     }
+
+    pub fn register_service(
+        ctx: Context<RegisterService>,
+        name: [u8; 32],
+        category: state::ServiceCategory,
+    ) -> Result<()> {
+        instructions::register_service::handler(ctx, name, category)
+    }
 }

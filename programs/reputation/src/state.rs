@@ -1,5 +1,33 @@
 use anchor_lang::prelude::*;
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ServiceCategory {
+    DataFeed,
+    Compute,
+    Swap,
+    Rpc,
+    Other,
+}
+
+#[account]
+pub struct ServiceRegistry {
+    pub authority: Pubkey,
+    pub name: [u8; 32],
+    pub category: ServiceCategory,
+    pub total_agents_served: u64,
+    pub total_volume_received_usdc: u64,
+    pub active: bool,
+    pub first_active_slot: u64,
+    pub last_active_slot: u64,
+    pub bump: u8,
+    pub _padding: [u8; 64],
+}
+
+impl ServiceRegistry {
+    // 8 disc + 32 + 32 + 1 + 8 + 8 + 1 + 8 + 8 + 1 + 64 = 171
+    pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 1 + 8 + 8 + 1 + 8 + 8 + 1 + 64;
+}
+
 #[account]
 pub struct AgentProfile {
     pub authority: Pubkey,
@@ -43,5 +71,18 @@ mod tests {
         hasher.update(b"account:AgentProfile");
         let expected: [u8; 8] = hasher.finalize()[..8].try_into().unwrap();
         assert_eq!(AgentProfile::DISCRIMINATOR, expected);
+    }
+
+    #[test]
+    fn service_registry_account_size_is_pinned() {
+        assert_eq!(ServiceRegistry::ACCOUNT_SIZE, 171);
+    }
+
+    #[test]
+    fn service_registry_discriminator_matches_anchor_format() {
+        let mut hasher = Sha256::new();
+        hasher.update(b"account:ServiceRegistry");
+        let expected: [u8; 8] = hasher.finalize()[..8].try_into().unwrap();
+        assert_eq!(ServiceRegistry::DISCRIMINATOR, expected);
     }
 }

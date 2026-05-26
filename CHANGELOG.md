@@ -9,6 +9,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). P
 
 ### Added
 
+- **Reputation program — `ServiceRegistry` PDA and `register_service` instruction.** Per-service registration with `name: [u8; 32]`, `category: ServiceCategory` (`DataFeed` / `Compute` / `Swap` / `Rpc` / `Other`), an `active` soft-delete flag, and running totals. 171-byte account. Single-signature (no dual-sig analog needed — a service has no separate human owner; the wallet *is* the service). LiteSVM tests cover happy path, re-register rejection, missing-signature rejection, and distinct-pubkeys-get-distinct-PDAs.
 - **Reputation program — `AgentProfile` PDA and `initialize_agent` instruction.** First on-chain primitive. The PDA carries the ERC-8004 discoverability fields (`agent_uri`, `external_agent_id`) per ADR-0003 and the feedback-counter shape (`total_feedback_count`, `active_negative_feedback_count`) per ADR-0004. Total account size: 321 bytes. `initialize_agent` requires dual signature (owner + agent) to close a squatting vector.
 - LiteSVM-based integration tests for `initialize_agent`: happy path (full field assertions), re-init rejection, missing owner signature rejection, missing agent signature rejection.
 - Discriminator-stability and account-size unit tests for `AgentProfile`. Pinning the 8-byte discriminator catches accidental struct renames that would break deserialization of deployed accounts.
