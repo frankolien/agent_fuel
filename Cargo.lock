@@ -310,6 +310,7 @@ dependencies = [
  "actix-web",
  "actix-ws",
  "anyhow",
+ "async-trait",
  "base64 0.22.1",
  "borsh 1.6.1",
  "bs58",

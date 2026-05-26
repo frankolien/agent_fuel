@@ -1,5 +1,8 @@
 use sqlx::PgPool;
 
+use std::sync::Arc;
+
+use crate::notifier::Notifier;
 use crate::score::ScoreCache;
 use crate::ws_hub::WsHub;
 
@@ -11,4 +14,5 @@ pub struct AppState {
     pub siws_domain: String,
     pub siws_chain_id: String,
     pub ws_hub: WsHub,
+    pub notifier: Arc<dyn Notifier>,
 }

@@ -1,8 +1,12 @@
 use std::time::Duration;
 
+use std::sync::Arc;
+
 use actix_governor::GovernorConfigBuilder;
 use actix_web::{middleware, web, App, HttpServer};
-use agent_fuel_backend::{config::Config, db, routes, score, state::AppState};
+use agent_fuel_backend::{
+    config::Config, db, notifier::LogNotifier, routes, score, state::AppState,
+};
 use tracing_actix_web::TracingLogger;
 
 const SCORE_SWEEP_INTERVAL: Duration = Duration::from_secs(300);
@@ -60,6 +64,9 @@ async fn main() -> anyhow::Result<()> {
         siws_domain: cfg.siws_domain.clone(),
         siws_chain_id: cfg.siws_chain_id.clone(),
         ws_hub: agent_fuel_backend::ws_hub::WsHub::default(),
+        // LogNotifier is the dev default; a real FCM dispatcher slots in
+        // here once FCM_SERVICE_ACCOUNT_JSON is provisioned.
+        notifier: Arc::new(LogNotifier),
     });
     let bind = cfg.bind_addr.clone();
 
