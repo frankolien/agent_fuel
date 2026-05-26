@@ -25,5 +25,12 @@ anchor-lang = { workspace = true, features = ["event-cpi"] }
 anchor-spl = { workspace = true }
 solana-security-txt = { workspace = true }
 
+[dev-dependencies]
+sha2 = { workspace = true }
+litesvm = { workspace = true }
+solana-sdk = { workspace = true }
+spl-token = "8.0"
+spl-associated-token-account = "7.0"
+
 [lints]
 workspace = true
