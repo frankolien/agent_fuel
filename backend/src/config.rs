@@ -7,6 +7,9 @@ pub struct Config {
     pub db_max_connections: u32,
     pub helius_webhook_secret: Option<String>,
     pub redis_url: Option<String>,
+    pub jwt_secret: Option<String>,
+    pub siws_domain: String,
+    pub siws_chain_id: String,
 }
 
 impl Config {
@@ -24,6 +27,12 @@ impl Config {
             .filter(|s| !s.is_empty());
         // Redis is optional in dev; score reads fall back to Postgres when unset.
         let redis_url = env::var("REDIS_URL").ok().filter(|s| !s.is_empty());
+        // `None` makes /auth/verify fail-closed (see routes::auth).
+        let jwt_secret = env::var("JWT_SECRET").ok().filter(|s| !s.is_empty());
+        let siws_domain =
+            env::var("SIWS_DOMAIN").unwrap_or_else(|_| "agent-fuel.local".to_string());
+        let siws_chain_id =
+            env::var("SIWS_CHAIN_ID").unwrap_or_else(|_| "solana:devnet".to_string());
 
         Ok(Self {
             bind_addr,
@@ -31,6 +40,9 @@ impl Config {
             db_max_connections,
             helius_webhook_secret,
             redis_url,
+            jwt_secret,
+            siws_domain,
+            siws_chain_id,
         })
     }
 }

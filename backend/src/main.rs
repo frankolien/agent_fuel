@@ -45,10 +45,19 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
+    if cfg.jwt_secret.is_none() {
+        tracing::warn!(
+            "JWT_SECRET unset — /auth/verify fails closed and any AuthedPubkey-protected route returns 503"
+        );
+    }
+
     let state = web::Data::new(AppState {
         pool,
         helius_webhook_secret: cfg.helius_webhook_secret.clone(),
         score_cache,
+        jwt_secret: cfg.jwt_secret.clone(),
+        siws_domain: cfg.siws_domain.clone(),
+        siws_chain_id: cfg.siws_chain_id.clone(),
     });
     let bind = cfg.bind_addr.clone();
 
