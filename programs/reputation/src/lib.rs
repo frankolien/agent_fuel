@@ -7,6 +7,7 @@
 use anchor_lang::prelude::*;
 use solana_security_txt::security_txt;
 
+pub mod errors;
 pub mod events;
 pub mod instructions;
 pub mod state;
@@ -43,5 +44,13 @@ pub mod reputation {
         category: state::ServiceCategory,
     ) -> Result<()> {
         instructions::register_service::handler(ctx, name, category)
+    }
+
+    pub fn record_payment(
+        ctx: Context<RecordPayment>,
+        amount_usdc: u64,
+        payment_receipt_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::record_payment::handler(ctx, amount_usdc, payment_receipt_hash)
     }
 }

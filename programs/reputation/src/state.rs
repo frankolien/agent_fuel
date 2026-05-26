@@ -53,6 +53,41 @@ impl AgentProfile {
         8 + 32 + 32 + 128 + 8 + 8 + 8 + 4 + 4 + 4 + 2 + 8 + 8 + 2 + 1 + 64;
 }
 
+#[account]
+pub struct AgentServiceLink {
+    pub agent: Pubkey,
+    pub service: Pubkey,
+    pub total_transactions: u64,
+    pub total_volume_usdc: u64,
+    pub first_payment_slot: u64,
+    pub last_payment_slot: u64,
+    pub bump: u8,
+    pub _padding: [u8; 64],
+}
+
+impl AgentServiceLink {
+    // 8 disc + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 64 = 169
+    pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 64;
+}
+
+// Existence-as-signal: a `ReceiptUsed` PDA at `[b"receipt", hash]` proves the
+// receipt has been recorded. `record_payment` opens the account with `init`
+// (not `init_if_needed`), so a replayed hash fails with `AccountAlreadyInUse`.
+// Fields beyond the discriminator are for off-chain auditing.
+#[account]
+pub struct ReceiptUsed {
+    pub receipt_hash: [u8; 32],
+    pub agent_service_link: Pubkey,
+    pub recorded_slot: u64,
+    pub bump: u8,
+    pub _padding: [u8; 32],
+}
+
+impl ReceiptUsed {
+    // 8 disc + 32 + 32 + 8 + 1 + 32 = 113
+    pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 8 + 1 + 32;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -84,5 +119,31 @@ mod tests {
         hasher.update(b"account:ServiceRegistry");
         let expected: [u8; 8] = hasher.finalize()[..8].try_into().unwrap();
         assert_eq!(ServiceRegistry::DISCRIMINATOR, expected);
+    }
+
+    #[test]
+    fn agent_service_link_account_size_is_pinned() {
+        assert_eq!(AgentServiceLink::ACCOUNT_SIZE, 169);
+    }
+
+    #[test]
+    fn agent_service_link_discriminator_matches_anchor_format() {
+        let mut hasher = Sha256::new();
+        hasher.update(b"account:AgentServiceLink");
+        let expected: [u8; 8] = hasher.finalize()[..8].try_into().unwrap();
+        assert_eq!(AgentServiceLink::DISCRIMINATOR, expected);
+    }
+
+    #[test]
+    fn receipt_used_account_size_is_pinned() {
+        assert_eq!(ReceiptUsed::ACCOUNT_SIZE, 113);
+    }
+
+    #[test]
+    fn receipt_used_discriminator_matches_anchor_format() {
+        let mut hasher = Sha256::new();
+        hasher.update(b"account:ReceiptUsed");
+        let expected: [u8; 8] = hasher.finalize()[..8].try_into().unwrap();
+        assert_eq!(ReceiptUsed::DISCRIMINATOR, expected);
     }
 }
