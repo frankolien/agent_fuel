@@ -8,6 +8,7 @@ pub struct Config {
     pub bind_addr: String,
     pub database_url: String,
     pub db_max_connections: u32,
+    pub helius_webhook_secret: Option<String>,
 }
 
 impl Config {
@@ -19,11 +20,18 @@ impl Config {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(10);
+        // None in dev (no Helius account yet) makes the webhook endpoint reject
+        // every request with 503 — fail-closed beats silently accepting whatever
+        // shows up before the secret is wired.
+        let helius_webhook_secret = env::var("HELIUS_WEBHOOK_SECRET")
+            .ok()
+            .filter(|s| !s.is_empty());
 
         Ok(Self {
             bind_addr,
             database_url,
             db_max_connections,
+            helius_webhook_secret,
         })
     }
 }
