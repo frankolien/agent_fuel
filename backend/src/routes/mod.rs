@@ -1,5 +1,6 @@
 use actix_web::web;
 
+pub mod api;
 pub mod auth;
 mod health;
 mod webhooks;
@@ -10,4 +11,5 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(webhooks::helius)
         .service(auth::nonce)
         .service(auth::verify);
+    api::configure(cfg);
 }
