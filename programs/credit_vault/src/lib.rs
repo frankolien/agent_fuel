@@ -6,6 +6,7 @@
 use anchor_lang::prelude::*;
 use solana_security_txt::security_txt;
 
+pub mod errors;
 pub mod events;
 pub mod instructions;
 pub mod state;
@@ -42,5 +43,9 @@ pub mod credit_vault {
             lifetime_limit_usdc,
             allow_post_pay,
         )
+    }
+
+    pub fn deposit(ctx: Context<Deposit>, amount_usdc: u64) -> Result<()> {
+        instructions::deposit::handler(ctx, amount_usdc)
     }
 }
