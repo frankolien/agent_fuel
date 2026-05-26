@@ -1,6 +1,7 @@
 pub mod config;
 pub mod db;
 pub mod events;
+pub mod mirror;
 pub mod parser;
 pub mod persist;
 pub mod routes;

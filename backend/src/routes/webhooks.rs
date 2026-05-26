@@ -1,7 +1,7 @@
 use actix_web::{http::header, post, web, HttpRequest, HttpResponse, Responder};
 use subtle::ConstantTimeEq;
 
-use crate::{parser, persist, state::AppState};
+use crate::{mirror, parser, persist, state::AppState};
 
 #[post("/webhooks/helius")]
 pub async fn helius(
@@ -27,22 +27,25 @@ pub async fn helius(
             );
             HttpResponse::Accepted().finish()
         }
-        Ok(events) => match persist::insert_events(&state.pool, &events).await {
-            Ok(inserted) => {
-                tracing::info!(
-                    parsed = events.len(),
-                    inserted,
-                    bytes = body.len(),
-                    "persisted Helius webhook events"
-                );
-                HttpResponse::Accepted().finish()
-            }
-            // 500 keeps Helius retrying; the events table is source of truth.
-            Err(err) => {
+        Ok(events) => {
+            if let Err(err) = persist::insert_events(&state.pool, &events).await {
                 tracing::error!(error = %err, "failed to persist webhook events");
-                HttpResponse::InternalServerError().finish()
+                return HttpResponse::InternalServerError().finish();
             }
-        },
+            let affected = mirror::affected(&events);
+            // Mirror failures are logged but do not fail the webhook — events
+            // are persisted, and the next webhook (or a manual refresh) will
+            // reconverge the mirror.
+            if let Err(err) = mirror::refresh(&state.pool, &affected).await {
+                tracing::error!(error = %err, "mirror refresh failed");
+            }
+            tracing::info!(
+                parsed = events.len(),
+                bytes = body.len(),
+                "ingested Helius webhook"
+            );
+            HttpResponse::Accepted().finish()
+        }
         // 400 stops Helius retries on payloads that can't ever be parsed.
         Err(err) => {
             tracing::warn!(error = %err, bytes = body.len(), "rejecting webhook: parse error");
