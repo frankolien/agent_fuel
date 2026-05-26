@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use actix_governor::GovernorConfigBuilder;
 use actix_web::{middleware, web, App, HttpServer};
 use agent_fuel_backend::{config::Config, db, routes, score, state::AppState};
 use tracing_actix_web::TracingLogger;
@@ -61,12 +62,21 @@ async fn main() -> anyhow::Result<()> {
     });
     let bind = cfg.bind_addr.clone();
 
+    // Built once so the underlying Arc<RateLimiter> is shared across all
+    // worker threads — otherwise each worker has its own bucket and the
+    // effective limit is N_workers × burst_size.
+    let reputation_rate_limit = GovernorConfigBuilder::default()
+        .seconds_per_request(1)
+        .burst_size(20)
+        .finish()
+        .expect("static governor config");
+
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
             .wrap(TracingLogger::default())
             .wrap(middleware::NormalizePath::trim())
-            .configure(routes::configure)
+            .configure(|cfg| routes::configure(cfg, &reputation_rate_limit))
     })
     .bind(&bind)?
     .run()
