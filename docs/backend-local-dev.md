@@ -37,7 +37,7 @@
 | Tool | Install | Why |
 | --- | --- | --- |
 | Rust toolchain | pinned by [`rust-toolchain.toml`](../rust-toolchain.toml) | builds the backend |
-| Docker Desktop | `brew install --cask docker` | runs Postgres |
+| Docker Desktop | `brew install --cask docker` | runs Postgres + Redis |
 | ngrok | `brew install ngrok` + `ngrok config add-authtoken <token>` (free signup) | exposes localhost to Helius |
 | Solana CLI | `sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"` | triggers test transactions |
 | Helius account | free signup at helius.dev | sends the webhooks |
@@ -91,6 +91,16 @@ reused). Nuke and retry:
 docker rm -f agent_fuel_pg
 docker volume prune -f
 # then re-run the docker run command
+```
+
+## Step 1b — Redis in Docker (slice 3.5+)
+
+Optional in dev — without Redis the score endpoint hits Postgres on every
+read, which is fine for low traffic. Recommended for parity with prod.
+
+```bash
+docker run -d --name agent_fuel_redis -p 6379:6379 redis:7-alpine
+docker exec agent_fuel_redis redis-cli PING   # → PONG
 ```
 
 ## Step 2 — `.env`
@@ -278,13 +288,13 @@ lsof -ti :8080 | xargs kill
 
 # Stop ngrok: Ctrl-C
 
-# Stop Postgres (keeps data)
-docker stop agent_fuel_pg
+# Stop Postgres / Redis (keeps data)
+docker stop agent_fuel_pg agent_fuel_redis
 
-# Fully wipe Postgres
-docker rm -f agent_fuel_pg
+# Fully wipe
+docker rm -f agent_fuel_pg agent_fuel_redis
 ```
 
-Restarting later: `docker start agent_fuel_pg` (data persists), then
-`cargo run -p agent_fuel_backend`, then `ngrok http 8080`, then update the
-Helius webhook URL.
+Restarting later: `docker start agent_fuel_pg agent_fuel_redis` (data
+persists), then `cargo run -p agent_fuel_backend`, then `ngrok http 8080`,
+then update the Helius webhook URL.

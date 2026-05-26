@@ -1,6 +1,10 @@
+use std::time::Duration;
+
 use actix_web::{middleware, web, App, HttpServer};
-use agent_fuel_backend::{config::Config, db, routes, state::AppState};
+use agent_fuel_backend::{config::Config, db, routes, score, state::AppState};
 use tracing_actix_web::TracingLogger;
+
+const SCORE_SWEEP_INTERVAL: Duration = Duration::from_secs(300);
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -19,9 +23,32 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    let score_cache = score::ScoreCache::connect(cfg.redis_url.as_deref()).await;
+    if !score_cache.is_enabled() {
+        tracing::warn!("REDIS_URL unset or unreachable — score reads will hit Postgres every time");
+    }
+
+    {
+        let pool = pool.clone();
+        let cache = score_cache.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(SCORE_SWEEP_INTERVAL);
+            tick.tick().await; // burn the immediate first tick
+            loop {
+                tick.tick().await;
+                match score::sweep(&pool, &cache).await {
+                    Ok(n) if n > 0 => tracing::info!(refreshed = n, "score sweep"),
+                    Ok(_) => {}
+                    Err(err) => tracing::warn!(error = %err, "score sweep failed"),
+                }
+            }
+        });
+    }
+
     let state = web::Data::new(AppState {
         pool,
         helius_webhook_secret: cfg.helius_webhook_secret.clone(),
+        score_cache,
     });
     let bind = cfg.bind_addr.clone();
 

@@ -1,7 +1,7 @@
 use actix_web::{http::header, post, web, HttpRequest, HttpResponse, Responder};
 use subtle::ConstantTimeEq;
 
-use crate::{mirror, parser, persist, state::AppState};
+use crate::{mirror, parser, persist, score, state::AppState};
 
 #[post("/webhooks/helius")]
 pub async fn helius(
@@ -39,6 +39,7 @@ pub async fn helius(
             if let Err(err) = mirror::refresh(&state.pool, &affected).await {
                 tracing::error!(error = %err, "mirror refresh failed");
             }
+            score::record_events(&state.pool, &state.score_cache, &events).await;
             tracing::info!(
                 parsed = events.len(),
                 bytes = body.len(),

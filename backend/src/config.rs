@@ -6,6 +6,7 @@ pub struct Config {
     pub database_url: String,
     pub db_max_connections: u32,
     pub helius_webhook_secret: Option<String>,
+    pub redis_url: Option<String>,
 }
 
 impl Config {
@@ -21,12 +22,15 @@ impl Config {
         let helius_webhook_secret = env::var("HELIUS_WEBHOOK_SECRET")
             .ok()
             .filter(|s| !s.is_empty());
+        // Redis is optional in dev; score reads fall back to Postgres when unset.
+        let redis_url = env::var("REDIS_URL").ok().filter(|s| !s.is_empty());
 
         Ok(Self {
             bind_addr,
             database_url,
             db_max_connections,
             helius_webhook_secret,
+            redis_url,
         })
     }
 }

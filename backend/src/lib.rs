@@ -5,4 +5,5 @@ pub mod mirror;
 pub mod parser;
 pub mod persist;
 pub mod routes;
+pub mod score;
 pub mod state;
