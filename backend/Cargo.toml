@@ -1,0 +1,36 @@
+[package]
+name = "agent_fuel_backend"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Agent Fuel backend — Actix-Web indexer + REST/WS API for the reputation and credit-vault programs."
+
+[[bin]]
+name = "agent_fuel_backend"
+path = "src/main.rs"
+
+[dependencies]
+actix-web = "4.9"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "macros",
+    "migrate",
+    "chrono",
+    "uuid",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-actix-web = "0.7"
+
+[dev-dependencies]
+actix-rt = "2"
