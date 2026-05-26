@@ -8,3 +8,4 @@ pub mod persist;
 pub mod routes;
 pub mod score;
 pub mod state;
+pub mod ws_hub;

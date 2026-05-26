@@ -7,6 +7,7 @@ pub mod auth;
 mod health;
 mod reputation;
 mod webhooks;
+mod ws;
 
 pub fn configure(
     cfg: &mut web::ServiceConfig,
@@ -17,6 +18,7 @@ pub fn configure(
         .service(webhooks::helius)
         .service(auth::nonce)
         .service(auth::verify)
+        .service(ws::agent_stream)
         .service(
             web::resource("/reputation/{agent}")
                 .wrap(Governor::new(reputation_rate_limit))

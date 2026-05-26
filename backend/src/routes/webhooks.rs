@@ -40,6 +40,7 @@ pub async fn helius(
                 tracing::error!(error = %err, "mirror refresh failed");
             }
             score::record_events(&state.pool, &state.score_cache, &events).await;
+            state.ws_hub.broadcast_events(&events);
             tracing::info!(
                 parsed = events.len(),
                 bytes = body.len(),

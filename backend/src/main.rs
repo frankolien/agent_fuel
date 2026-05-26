@@ -59,6 +59,7 @@ async fn main() -> anyhow::Result<()> {
         jwt_secret: cfg.jwt_secret.clone(),
         siws_domain: cfg.siws_domain.clone(),
         siws_chain_id: cfg.siws_chain_id.clone(),
+        ws_hub: agent_fuel_backend::ws_hub::WsHub::default(),
     });
     let bind = cfg.bind_addr.clone();
 

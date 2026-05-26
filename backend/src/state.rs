@@ -1,6 +1,7 @@
 use sqlx::PgPool;
 
 use crate::score::ScoreCache;
+use crate::ws_hub::WsHub;
 
 pub struct AppState {
     pub pool: PgPool,
@@ -9,4 +10,5 @@ pub struct AppState {
     pub jwt_secret: Option<String>,
     pub siws_domain: String,
     pub siws_chain_id: String,
+    pub ws_hub: WsHub,
 }
