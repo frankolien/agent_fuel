@@ -88,6 +88,34 @@ impl ReceiptUsed {
     pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 8 + 1 + 32;
 }
 
+#[account]
+pub struct FeedbackRecord {
+    pub agent_profile: Pubkey,
+    pub service_registry: Pubkey,
+    pub payment_receipt_hash: [u8; 32],
+    pub value: i8,
+    pub tags: u32,
+    pub evidence_uri: [u8; 128],
+    pub evidence_hash: [u8; 32],
+    pub response_uri: [u8; 128],
+    pub response_hash: [u8; 32],
+    pub has_response: bool,
+    pub revoked: bool,
+    pub created_slot: u64,
+    pub last_modified_slot: u64,
+    pub bump: u8,
+    pub _padding: [u8; 64],
+}
+
+impl FeedbackRecord {
+    // 8 disc + 32 + 32 + 32 + 1 + 4 + 128 + 32 + 128 + 32 + 1 + 1 + 8 + 8 + 1 + 64 = 512
+    pub const ACCOUNT_SIZE: usize =
+        8 + 32 + 32 + 32 + 1 + 4 + 128 + 32 + 128 + 32 + 1 + 1 + 8 + 8 + 1 + 64;
+
+    pub const VALUE_MIN: i8 = -100;
+    pub const VALUE_MAX: i8 = 100;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,5 +173,18 @@ mod tests {
         hasher.update(b"account:ReceiptUsed");
         let expected: [u8; 8] = hasher.finalize()[..8].try_into().unwrap();
         assert_eq!(ReceiptUsed::DISCRIMINATOR, expected);
+    }
+
+    #[test]
+    fn feedback_record_account_size_is_pinned() {
+        assert_eq!(FeedbackRecord::ACCOUNT_SIZE, 512);
+    }
+
+    #[test]
+    fn feedback_record_discriminator_matches_anchor_format() {
+        let mut hasher = Sha256::new();
+        hasher.update(b"account:FeedbackRecord");
+        let expected: [u8; 8] = hasher.finalize()[..8].try_into().unwrap();
+        assert_eq!(FeedbackRecord::DISCRIMINATOR, expected);
     }
 }

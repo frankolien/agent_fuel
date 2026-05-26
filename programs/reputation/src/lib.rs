@@ -53,4 +53,22 @@ pub mod reputation {
     ) -> Result<()> {
         instructions::record_payment::handler(ctx, amount_usdc, payment_receipt_hash)
     }
+
+    pub fn give_feedback(
+        ctx: Context<GiveFeedback>,
+        payment_receipt_hash: [u8; 32],
+        value: i8,
+        tags: u32,
+        evidence_uri: [u8; 128],
+        evidence_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::give_feedback::handler(
+            ctx,
+            payment_receipt_hash,
+            value,
+            tags,
+            evidence_uri,
+            evidence_hash,
+        )
+    }
 }

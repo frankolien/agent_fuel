@@ -26,3 +26,14 @@ pub struct PaymentRecorded {
     pub was_new_pair: bool,
     pub slot: u64,
 }
+
+#[event]
+pub struct FeedbackGiven {
+    pub agent: Pubkey,
+    pub service: Pubkey,
+    pub feedback: Pubkey,
+    pub payment_receipt_hash: [u8; 32],
+    pub value: i8,
+    pub tags: u32,
+    pub slot: u64,
+}

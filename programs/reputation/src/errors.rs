@@ -8,4 +8,10 @@ pub enum ReputationError {
     ServiceInactive,
     #[msg("Payment amount must be greater than zero")]
     ZeroAmount,
+    #[msg("A service may not rate itself or the agent owner")]
+    SelfRating,
+    #[msg("Receipt does not belong to this (agent, service) pair")]
+    ReceiptMismatch,
+    #[msg("Feedback value is outside the allowed range")]
+    InvalidFeedbackValue,
 }
