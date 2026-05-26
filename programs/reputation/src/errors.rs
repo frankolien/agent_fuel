@@ -20,4 +20,6 @@ pub enum ReputationError {
     AlreadyHasResponse,
     #[msg("Feedback has already been revoked")]
     AlreadyRevoked,
+    #[msg("Feedback rate limit not yet expired for this (service, agent) pair")]
+    FeedbackRateLimited,
 }

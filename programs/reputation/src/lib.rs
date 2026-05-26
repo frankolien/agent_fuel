@@ -92,4 +92,8 @@ pub mod reputation {
     ) -> Result<()> {
         instructions::revoke_feedback::handler(ctx, payment_receipt_hash)
     }
+
+    pub fn compute_score(ctx: Context<ComputeScore>) -> Result<()> {
+        instructions::compute_score::handler(ctx)
+    }
 }

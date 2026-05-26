@@ -679,3 +679,207 @@ fn give_feedback_rejects_missing_service_signature() {
     let result = svm.send_transaction(tx);
     assert!(result.is_err(), "missing service signature must fail");
 }
+
+// ---- slice 5d: rate-limit tests ---------------------------------------------
+
+// Records a second payment between an existing pair, returning the new
+// receipt PDA + hash so the caller can attempt a second feedback.
+fn record_second_payment(
+    svm: &mut LiteSVM,
+    service: &Keypair,
+    agent_profile: Pubkey,
+    service_registry: Pubkey,
+    agent_service_link: Pubkey,
+    receipt_hash: [u8; 32],
+) -> Pubkey {
+    let receipt_used = derive_receipt_pda(&receipt_hash);
+    let accounts = reputation::accounts::RecordPayment {
+        service: service.pubkey(),
+        agent_profile,
+        service_registry,
+        agent_service_link,
+        receipt_used,
+        system_program: System::id(),
+    };
+    let ix = Instruction {
+        program_id: reputation::ID,
+        accounts: accounts.to_account_metas(None),
+        data: reputation::instruction::RecordPayment {
+            amount_usdc: 250_000,
+            payment_receipt_hash: receipt_hash,
+        }
+        .data(),
+    };
+    let blockhash = svm.latest_blockhash();
+    let tx =
+        Transaction::new_signed_with_payer(&[ix], Some(&service.pubkey()), &[&service], blockhash);
+    svm.send_transaction(tx)
+        .expect("second record_payment failed");
+    receipt_used
+}
+
+#[test]
+fn give_feedback_rate_limit_blocks_second_within_window() {
+    let Fixture {
+        mut svm,
+        service,
+        agent_profile,
+        service_registry,
+        agent_service_link,
+        receipt_used: first_receipt_used,
+        receipt_hash: first_receipt,
+    } = setup();
+    let first_feedback_pda = derive_feedback_pda(&first_receipt);
+
+    // First feedback — should succeed (last_feedback_slot was the 0 sentinel).
+    let ix1 = build_feedback_ix(
+        &service.pubkey(),
+        &agent_profile,
+        &service_registry,
+        &agent_service_link,
+        &first_receipt_used,
+        &first_feedback_pda,
+        first_receipt,
+        50,
+        0,
+        [0u8; 128],
+        [0u8; 32],
+    );
+    let blockhash = svm.latest_blockhash();
+    let tx1 = Transaction::new_signed_with_payer(
+        std::slice::from_ref(&ix1),
+        Some(&service.pubkey()),
+        &[&service],
+        blockhash,
+    );
+    svm.send_transaction(tx1)
+        .expect("first feedback must succeed");
+
+    // Second payment with a NEW receipt — otherwise we'd hit the per-receipt
+    // dedupe and never reach the rate-limit gate.
+    let second_receipt = [0xa5u8; 32];
+    let second_receipt_used = record_second_payment(
+        &mut svm,
+        &service,
+        agent_profile,
+        service_registry,
+        agent_service_link,
+        second_receipt,
+    );
+    let second_feedback_pda = derive_feedback_pda(&second_receipt);
+
+    svm.expire_blockhash();
+    let ix2 = build_feedback_ix(
+        &service.pubkey(),
+        &agent_profile,
+        &service_registry,
+        &agent_service_link,
+        &second_receipt_used,
+        &second_feedback_pda,
+        second_receipt,
+        -20,
+        0,
+        [0u8; 128],
+        [0u8; 32],
+    );
+    let blockhash = svm.latest_blockhash();
+    let tx2 =
+        Transaction::new_signed_with_payer(&[ix2], Some(&service.pubkey()), &[&service], blockhash);
+    let result = svm.send_transaction(tx2);
+    assert!(
+        result.is_err(),
+        "second feedback inside the rate-limit window must be rejected"
+    );
+
+    // The second feedback PDA must NOT exist (init was rolled back).
+    assert!(
+        svm.get_account(&second_feedback_pda).is_none(),
+        "blocked feedback must not leave a FeedbackRecord behind"
+    );
+
+    // The aggregate counters must still reflect only ONE feedback.
+    let profile = AgentProfile::try_deserialize(
+        &mut svm.get_account(&agent_profile).unwrap().data.as_slice(),
+    )
+    .unwrap();
+    assert_eq!(profile.total_feedback_count, 1);
+}
+
+#[test]
+fn give_feedback_rate_limit_allows_second_after_window() {
+    let Fixture {
+        mut svm,
+        service,
+        agent_profile,
+        service_registry,
+        agent_service_link,
+        receipt_used: first_receipt_used,
+        receipt_hash: first_receipt,
+    } = setup();
+    let first_feedback_pda = derive_feedback_pda(&first_receipt);
+
+    let ix1 = build_feedback_ix(
+        &service.pubkey(),
+        &agent_profile,
+        &service_registry,
+        &agent_service_link,
+        &first_receipt_used,
+        &first_feedback_pda,
+        first_receipt,
+        50,
+        0,
+        [0u8; 128],
+        [0u8; 32],
+    );
+    let blockhash = svm.latest_blockhash();
+    let tx1 = Transaction::new_signed_with_payer(
+        std::slice::from_ref(&ix1),
+        Some(&service.pubkey()),
+        &[&service],
+        blockhash,
+    );
+    svm.send_transaction(tx1)
+        .expect("first feedback must succeed");
+
+    // Warp clock past the rate-limit window. LiteSVM starts near slot 0; warp
+    // well past FEEDBACK_RATE_LIMIT_SLOTS so the gate releases.
+    let target_slot = FeedbackRecord::FEEDBACK_RATE_LIMIT_SLOTS + 1_000;
+    svm.warp_to_slot(target_slot);
+    svm.expire_blockhash();
+
+    let second_receipt = [0xb7u8; 32];
+    let second_receipt_used = record_second_payment(
+        &mut svm,
+        &service,
+        agent_profile,
+        service_registry,
+        agent_service_link,
+        second_receipt,
+    );
+    let second_feedback_pda = derive_feedback_pda(&second_receipt);
+
+    let ix2 = build_feedback_ix(
+        &service.pubkey(),
+        &agent_profile,
+        &service_registry,
+        &agent_service_link,
+        &second_receipt_used,
+        &second_feedback_pda,
+        second_receipt,
+        70,
+        0,
+        [0u8; 128],
+        [0u8; 32],
+    );
+    let blockhash = svm.latest_blockhash();
+    let tx2 =
+        Transaction::new_signed_with_payer(&[ix2], Some(&service.pubkey()), &[&service], blockhash);
+    svm.send_transaction(tx2)
+        .expect("second feedback past rate-limit window must succeed");
+
+    let profile = AgentProfile::try_deserialize(
+        &mut svm.get_account(&agent_profile).unwrap().data.as_slice(),
+    )
+    .unwrap();
+    assert_eq!(profile.total_feedback_count, 2);
+}

@@ -45,6 +45,7 @@ pub struct GiveFeedback<'info> {
     pub service_registry: Account<'info, ServiceRegistry>,
 
     #[account(
+        mut,
         seeds = [
             b"link",
             agent_profile.key().as_ref(),
@@ -92,6 +93,20 @@ pub fn handler(
     );
 
     let slot = Clock::get()?.slot;
+
+    // Rate limit: the explicit flag rather than a 0-slot sentinel — at genesis
+    // (or in tests) real feedback can land at slot 0. `saturating_sub` is a
+    // belt-and-braces against a hypothetical backwards-clock state.
+    let link = &mut ctx.accounts.agent_service_link;
+    if link.has_received_feedback {
+        let elapsed = slot.saturating_sub(link.last_feedback_slot);
+        require!(
+            elapsed >= FeedbackRecord::FEEDBACK_RATE_LIMIT_SLOTS,
+            ReputationError::FeedbackRateLimited
+        );
+    }
+    link.last_feedback_slot = slot;
+    link.has_received_feedback = true;
     let agent_key = ctx.accounts.agent_profile.key();
     let service_key = ctx.accounts.service_registry.key();
     let feedback_key = ctx.accounts.feedback_record.key();

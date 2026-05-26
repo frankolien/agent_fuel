@@ -54,3 +54,10 @@ pub struct FeedbackRevoked {
     pub was_negative: bool,
     pub slot: u64,
 }
+
+#[event]
+pub struct ScoreComputed {
+    pub agent: Pubkey,
+    pub score: u16,
+    pub slot: u64,
+}

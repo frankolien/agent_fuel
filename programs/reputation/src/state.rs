@@ -61,13 +61,19 @@ pub struct AgentServiceLink {
     pub total_volume_usdc: u64,
     pub first_payment_slot: u64,
     pub last_payment_slot: u64,
+    pub last_feedback_slot: u64,
+    // Explicit "has any feedback been filed?" flag rather than re-using
+    // `last_feedback_slot == 0`. At genesis (or in test environments) a real
+    // feedback can legitimately land at slot 0, so the slot value alone
+    // cannot distinguish "never" from "at the very start".
+    pub has_received_feedback: bool,
     pub bump: u8,
     pub _padding: [u8; 64],
 }
 
 impl AgentServiceLink {
-    // 8 disc + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 64 = 169
-    pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 64;
+    // 8 disc + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 1 + 64 = 178
+    pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 1 + 64;
 }
 
 // Existence-as-signal: a `ReceiptUsed` PDA at `[b"receipt", hash]` proves the
@@ -114,6 +120,10 @@ impl FeedbackRecord {
 
     pub const VALUE_MIN: i8 = -100;
     pub const VALUE_MAX: i8 = 100;
+
+    // ~24 hours at Solana's nominal 400 ms slot time (60 * 60 * 24 * 2.5).
+    // Actual wall-clock window varies with cluster slot rate.
+    pub const FEEDBACK_RATE_LIMIT_SLOTS: u64 = 216_000;
 }
 
 #[cfg(test)]
@@ -151,7 +161,7 @@ mod tests {
 
     #[test]
     fn agent_service_link_account_size_is_pinned() {
-        assert_eq!(AgentServiceLink::ACCOUNT_SIZE, 169);
+        assert_eq!(AgentServiceLink::ACCOUNT_SIZE, 178);
     }
 
     #[test]
