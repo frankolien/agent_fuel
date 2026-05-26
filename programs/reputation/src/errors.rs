@@ -18,4 +18,6 @@ pub enum ReputationError {
     UnauthorizedResponder,
     #[msg("Feedback already has a response")]
     AlreadyHasResponse,
+    #[msg("Feedback has already been revoked")]
+    AlreadyRevoked,
 }

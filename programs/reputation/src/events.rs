@@ -45,3 +45,12 @@ pub struct ResponseAppended {
     pub responder: Pubkey,
     pub slot: u64,
 }
+
+#[event]
+pub struct FeedbackRevoked {
+    pub agent: Pubkey,
+    pub service: Pubkey,
+    pub feedback: Pubkey,
+    pub was_negative: bool,
+    pub slot: u64,
+}

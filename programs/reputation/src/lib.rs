@@ -85,4 +85,11 @@ pub mod reputation {
             response_hash,
         )
     }
+
+    pub fn revoke_feedback(
+        ctx: Context<RevokeFeedback>,
+        payment_receipt_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::revoke_feedback::handler(ctx, payment_receipt_hash)
+    }
 }
