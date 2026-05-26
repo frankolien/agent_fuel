@@ -1,20 +1,7 @@
-// Helius enhanced-webhook receiver.
-//
-// Phase 3 Slice 2: verify the shared-secret header in constant time and log
-// the payload. Slice 3.3 introduces the parser that decodes payloads into
-// rows in `events`; until then this endpoint exists to (a) let us configure
-// the Helius webhook at the dashboard, (b) validate the auth path under real
-// traffic, and (c) catch payload-shape surprises early via tracing.
-//
-// Helius signs requests with a static shared secret presented in the
-// `Authorization` header (raw string, no scheme prefix, no HMAC). We compare
-// in constant time so a probing attacker can't time-attack the secret one
-// byte at a time.
-
 use actix_web::{http::header, post, web, HttpRequest, HttpResponse, Responder};
 use subtle::ConstantTimeEq;
 
-use crate::state::AppState;
+use crate::{parser, persist, state::AppState};
 
 #[post("/webhooks/helius")]
 pub async fn helius(
@@ -27,39 +14,63 @@ pub async fn helius(
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    verify_and_log(state.helius_webhook_secret.as_deref(), presented, &body)
+
+    if let Some(early) = verify(state.helius_webhook_secret.as_deref(), presented) {
+        return early;
+    }
+
+    match parser::parse(&body) {
+        Ok(events) if events.is_empty() => {
+            tracing::info!(
+                bytes = body.len(),
+                "accepted webhook: no decodable events in payload"
+            );
+            HttpResponse::Accepted().finish()
+        }
+        Ok(events) => match persist::insert_events(&state.pool, &events).await {
+            Ok(inserted) => {
+                tracing::info!(
+                    parsed = events.len(),
+                    inserted,
+                    bytes = body.len(),
+                    "persisted Helius webhook events"
+                );
+                HttpResponse::Accepted().finish()
+            }
+            // 500 keeps Helius retrying; the events table is source of truth.
+            Err(err) => {
+                tracing::error!(error = %err, "failed to persist webhook events");
+                HttpResponse::InternalServerError().finish()
+            }
+        },
+        // 400 stops Helius retries on payloads that can't ever be parsed.
+        Err(err) => {
+            tracing::warn!(error = %err, bytes = body.len(), "rejecting webhook: parse error");
+            HttpResponse::BadRequest().finish()
+        }
+    }
 }
 
-// Split out so the auth + dispatch logic is unit-testable without standing
-// up an AppState + PgPool. The actix handler is the only caller in prod.
-fn verify_and_log(expected: Option<&str>, presented: &str, body: &[u8]) -> HttpResponse {
+// Returns the early HTTP response if auth fails, or `None` to proceed.
+fn verify(expected: Option<&str>, presented: &str) -> Option<HttpResponse> {
+    // Fail closed when the secret is unset — otherwise any caller could
+    // post arbitrary events into the indexer.
     let Some(expected) = expected else {
-        // Fail closed if the operator forgot to wire the secret — accepting
-        // anonymous webhooks would silently let any caller poison the indexer.
         tracing::error!("rejecting webhook: HELIUS_WEBHOOK_SECRET not configured");
-        return HttpResponse::ServiceUnavailable().finish();
+        return Some(HttpResponse::ServiceUnavailable().finish());
     };
-
     if !secret_matches(presented, expected) {
         tracing::warn!(
             presented_len = presented.len(),
             "rejecting webhook: bad Authorization header"
         );
-        return HttpResponse::Unauthorized().finish();
+        return Some(HttpResponse::Unauthorized().finish());
     }
-
-    tracing::info!(
-        bytes = body.len(),
-        "accepted Helius webhook payload (parser arrives in slice 3.3)"
-    );
-    HttpResponse::Accepted().finish()
+    None
 }
 
-// Length-prefixed constant-time compare. `ConstantTimeEq` on byte slices of
-// different lengths returns false in constant time relative to the *shorter*
-// length, so an attacker can still distinguish "right length, wrong bytes"
-// from "wrong length". We accept that — the secret's length is not the
-// sensitive bit; its content is.
+// `ct_eq` on different-length byte slices runs in constant time relative to
+// the shorter input; we don't treat secret length as sensitive.
 fn secret_matches(presented: &str, expected: &str) -> bool {
     presented.as_bytes().ct_eq(expected.as_bytes()).into()
 }
@@ -92,25 +103,24 @@ mod tests {
 
     #[test]
     fn verify_503_when_secret_unconfigured() {
-        let resp = verify_and_log(None, "anything", b"{}");
+        let resp = verify(None, "anything").unwrap();
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     #[test]
     fn verify_401_on_missing_header() {
-        let resp = verify_and_log(Some("hunter2"), "", b"{}");
+        let resp = verify(Some("hunter2"), "").unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]
     fn verify_401_on_wrong_secret() {
-        let resp = verify_and_log(Some("hunter2"), "nope", b"{}");
+        let resp = verify(Some("hunter2"), "nope").unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]
-    fn verify_202_on_good_secret() {
-        let resp = verify_and_log(Some("hunter2"), "hunter2", b"{\"ok\":true}");
-        assert_eq!(resp.status(), StatusCode::ACCEPTED);
+    fn verify_returns_none_on_good_secret() {
+        assert!(verify(Some("hunter2"), "hunter2").is_none());
     }
 }

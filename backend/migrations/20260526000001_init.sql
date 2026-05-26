@@ -1,10 +1,5 @@
--- Phase 3 Slice 1: bootstrap migration.
---
--- `schema_meta` records a single row per deployment fingerprint so the
--- readiness endpoint can confirm the migration system reached this DB on the
--- expected revision. Real domain tables (events, agents, vaults, services,
--- score_history) arrive in Slices 3.3-3.5.
-
+-- Single-row deployment marker so a deployed instance can prove migrations
+-- ran against this DB before any domain tables exist.
 CREATE TABLE IF NOT EXISTS schema_meta (
     id           SMALLINT PRIMARY KEY DEFAULT 1,
     bootstrapped TIMESTAMPTZ NOT NULL DEFAULT now(),

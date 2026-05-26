@@ -1,6 +1,3 @@
-// Env-driven configuration. Single source of truth for what the process reads
-// from the environment — `dependencies.md` §10 lists every var.
-
 use std::env;
 
 #[derive(Debug, Clone)]
@@ -20,9 +17,7 @@ impl Config {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(10);
-        // None in dev (no Helius account yet) makes the webhook endpoint reject
-        // every request with 503 — fail-closed beats silently accepting whatever
-        // shows up before the secret is wired.
+        // `None` makes the webhook endpoint fail-closed (see routes::webhooks::verify).
         let helius_webhook_secret = env::var("HELIUS_WEBHOOK_SECRET")
             .ok()
             .filter(|s| !s.is_empty());

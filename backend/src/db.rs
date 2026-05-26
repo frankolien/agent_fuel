@@ -1,9 +1,3 @@
-// Postgres connection pool + migration runner.
-//
-// Migrations live under `backend/migrations/` and are embedded into the binary
-// via the `sqlx::migrate!` macro, so a deployed image carries its schema with
-// it — no separate `sqlx migrate run` step on prod.
-
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::time::Duration;
 

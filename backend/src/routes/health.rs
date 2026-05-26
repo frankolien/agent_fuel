@@ -1,13 +1,5 @@
-// Health endpoints.
-//
-// `/health/live` answers "is this process running?" — no dependencies, used by
-// container platforms (Fly.io health checks, k8s liveness probes) to decide
-// when to restart the binary.
-//
-// `/health/ready` answers "can this process serve traffic?" — pings Postgres
-// so a stuck DB takes the instance out of rotation without killing it. Split
-// is deliberate: a DB blip should fail readiness but not trigger a restart
-// loop.
+// Split live/ready so a DB blip drains the instance from a load balancer
+// without tripping the container platform's restart loop.
 
 use actix_web::{get, web, HttpResponse, Responder};
 use serde::Serialize;

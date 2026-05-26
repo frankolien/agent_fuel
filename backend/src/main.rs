@@ -1,20 +1,6 @@
-// Agent Fuel backend entrypoint.
-//
-// Phase 3 Slice 1: Actix-Web app skeleton with Postgres pool, sqlx-managed
-// migrations on startup, and a liveness/readiness split health endpoint.
-// Later slices add the Helius webhook receiver, event parser, mirror tables,
-// score engine, SIWS auth, REST surfaces, the WebSocket stream, and FCM alerts.
-
 use actix_web::{middleware, web, App, HttpServer};
+use agent_fuel_backend::{config::Config, db, routes, state::AppState};
 use tracing_actix_web::TracingLogger;
-
-mod config;
-mod db;
-mod routes;
-mod state;
-
-use config::Config;
-use state::AppState;
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -59,12 +45,9 @@ fn init_tracing() {
     fmt().with_env_filter(filter).with_target(false).init();
 }
 
-// `cargo run -p agent_fuel_backend` invokes the binary with the backend
-// package directory as CWD, while a `cargo run` from the repo root invokes
-// with the workspace root. `dotenvy::dotenv()` only searches CWD, so a single
-// repo-root `.env` was being missed when run via `-p`. We try the repo root
-// explicitly (one level up from the package dir), then fall back to `dotenv()`
-// for any other layout.
+// `cargo run -p agent_fuel_backend` sets CWD to backend/, where `.env`
+// doesn't live; try the repo root first, then fall back to dotenvy's
+// own up-walk for any other layout.
 fn load_dotenv() {
     if dotenvy::from_filename("../.env").is_ok() {
         return;
@@ -72,7 +55,6 @@ fn load_dotenv() {
     let _ = dotenvy::dotenv();
 }
 
-// Strip credentials before logging — the URL otherwise leaks the password.
 fn redact_db_url(url: &str) -> String {
     if let Some(rest) = url.strip_prefix("postgres://") {
         if let Some(at) = rest.find('@') {

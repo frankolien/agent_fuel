@@ -23,6 +23,11 @@ backend/
         └── health.rs      /health/live + /health/ready
 ```
 
+> **For the full step-by-step walk** (including the docker/ngrok/Helius
+> setup and the real gotchas we hit), see
+> [`docs/backend-local-dev.md`](../docs/backend-local-dev.md). The section
+> below is the condensed version.
+
 ## Running locally
 
 Prereqs: Rust toolchain pinned by [`rust-toolchain.toml`](../rust-toolchain.toml),

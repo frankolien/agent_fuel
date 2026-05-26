@@ -18,6 +18,8 @@ solana-security-txt = "1.1.1"
 # Test-only — referenced from program crates' [dev-dependencies].
 litesvm = "0.7"
 solana-sdk = "2.2"
+# Used by program dev-deps for discriminator pins and by the backend at
+# runtime for Anchor event-discriminator derivation.
 sha2 = "0.10"
 
 [workspace.lints.rust]
