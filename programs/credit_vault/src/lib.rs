@@ -9,6 +9,7 @@ use solana_security_txt::security_txt;
 pub mod errors;
 pub mod events;
 pub mod instructions;
+pub mod policy;
 pub mod state;
 
 use instructions::*;
@@ -47,5 +48,43 @@ pub mod credit_vault {
 
     pub fn deposit(ctx: Context<Deposit>, amount_usdc: u64) -> Result<()> {
         instructions::deposit::handler(ctx, amount_usdc)
+    }
+
+    pub fn spend(ctx: Context<Spend>, amount_usdc: u64) -> Result<()> {
+        instructions::spend::handler(ctx, amount_usdc)
+    }
+
+    pub fn freeze_vault(ctx: Context<FreezeVault>) -> Result<()> {
+        instructions::freeze_vault::freeze_handler(ctx)
+    }
+
+    pub fn unfreeze_vault(ctx: Context<FreezeVault>) -> Result<()> {
+        instructions::freeze_vault::unfreeze_handler(ctx)
+    }
+
+    pub fn update_policy(
+        ctx: Context<UpdatePolicy>,
+        new_per_tx_limit_usdc: u64,
+        new_hourly_limit_usdc: u64,
+        new_lifetime_limit_usdc: u64,
+        new_allow_post_pay: bool,
+        new_whitelist: [Pubkey; state::WHITELIST_LEN],
+    ) -> Result<()> {
+        instructions::update_policy::handler(
+            ctx,
+            new_per_tx_limit_usdc,
+            new_hourly_limit_usdc,
+            new_lifetime_limit_usdc,
+            new_allow_post_pay,
+            new_whitelist,
+        )
+    }
+
+    pub fn withdraw(ctx: Context<Withdraw>, amount_usdc: u64) -> Result<()> {
+        instructions::withdraw::handler(ctx, amount_usdc)
+    }
+
+    pub fn claim(ctx: Context<Claim>, amount_usdc: u64) -> Result<()> {
+        instructions::claim::handler(ctx, amount_usdc)
     }
 }

@@ -22,10 +22,18 @@ impl CreditVault {
     pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 1 + 8 + 8 + 1 + 64;
 }
 
+// Slice 2.5: fixed-size whitelist on the policy rather than a merkle root.
+// 8 slots covers realistic v1 vault usage (one agent + a handful of services).
+// All-zero array = "allow any service". See data-model.md for rationale.
+pub const WHITELIST_LEN: usize = 8;
+
+// Slice 2.7: rolling hourly window length, ≈ 1 hour at 400 ms slot time.
+pub const SLOTS_PER_HOUR: u64 = 9_000;
+
 #[account]
 pub struct SpendPolicy {
     pub vault: Pubkey,
-    pub whitelist_root: [u8; 32],
+    pub whitelist: [Pubkey; WHITELIST_LEN],
     pub per_tx_limit_usdc: u64,
     pub hourly_limit_usdc: u64,
     pub lifetime_limit_usdc: u64,
@@ -37,8 +45,8 @@ pub struct SpendPolicy {
 }
 
 impl SpendPolicy {
-    // disc(8) + vault(32) + whitelist_root(32) + 5×u64(40) + bool(1) + bump(1) + padding(64) = 186
-    pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 1 + 64;
+    // disc(8) + vault(32) + whitelist(8×32=256) + 5×u64(40) + bool(1) + bump(1) + padding(64) = 402
+    pub const ACCOUNT_SIZE: usize = 8 + 32 + (32 * WHITELIST_LEN) + 8 + 8 + 8 + 8 + 8 + 1 + 1 + 64;
 }
 
 #[cfg(test)]
@@ -65,9 +73,10 @@ mod tests {
 
     #[test]
     fn spend_policy_account_size_matches_data_model() {
-        // disc(8) + vault(32) + whitelist_root(32) + 5*u64(40) + bool(1) + bump(1) + padding(64)
-        let expected = 8 + 32 + 32 + 8 * 5 + 1 + 1 + 64;
+        // disc(8) + vault(32) + whitelist(8*Pubkey=256) + 5*u64(40) + bool(1) + bump(1) + padding(64)
+        let expected = 8 + 32 + 32 * WHITELIST_LEN + 8 * 5 + 1 + 1 + 64;
         assert_eq!(SpendPolicy::ACCOUNT_SIZE, expected);
+        assert_eq!(SpendPolicy::ACCOUNT_SIZE, 402);
     }
 
     #[test]

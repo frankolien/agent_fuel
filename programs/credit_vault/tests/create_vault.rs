@@ -168,7 +168,7 @@ fn create_vault_happy_path() {
     let policy_acct = svm.get_account(&policy_pda).expect("policy missing");
     let policy = SpendPolicy::try_deserialize(&mut policy_acct.data.as_slice()).unwrap();
     assert_eq!(policy.vault, vault_pda);
-    assert_eq!(policy.whitelist_root, [0u8; 32]);
+    assert_eq!(policy.whitelist, [Pubkey::default(); 8]);
     assert_eq!(policy.per_tx_limit_usdc, 1_000_000);
     assert_eq!(policy.hourly_limit_usdc, 10_000_000);
     assert_eq!(policy.lifetime_limit_usdc, 100_000_000);
