@@ -5,7 +5,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.89"
 license = "Apache-2.0"
 repository = "https://github.com/TODO/agent_fuel"
 authors = ["Agent Fuel Contributors"]
@@ -14,6 +14,11 @@ authors = ["Agent Fuel Contributors"]
 anchor-lang = "0.31.1"
 anchor-spl = "0.31.1"
 solana-security-txt = "1.1.1"
+
+# Test-only — referenced from program crates' [dev-dependencies].
+litesvm = "0.7"
+solana-sdk = "2.2"
+sha2 = "0.10"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = [

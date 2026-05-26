@@ -12,8 +12,8 @@ env:
   ANCHOR_VERSION: "0.31.1"
 
 jobs:
-  rust:
-    name: Rust workspace (fmt / clippy / test / audit)
+  build-test-lint:
+    name: Build, test, lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +21,7 @@ jobs:
       - name: Install Rust toolchain (from rust-toolchain.toml)
         run: rustup show active-toolchain || rustup toolchain install
 
-      - name: Cache cargo registry and target
+      - name: Cache cargo registry, git, target
         uses: actions/cache@v4
         with:
           path: |
@@ -34,24 +34,7 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Clippy (deny warnings)
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Workspace tests
-        run: cargo test --all --locked
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-      - name: Audit dependencies
-        run: cargo audit
-
-  anchor:
-    name: Anchor build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain (from rust-toolchain.toml)
-        run: rustup show active-toolchain || rustup toolchain install
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Install Solana CLI
         run: |
@@ -61,5 +44,14 @@ jobs:
       - name: Install Anchor CLI
         run: cargo install --git https://github.com/coral-xyz/anchor --tag v${ANCHOR_VERSION} anchor-cli --locked
 
-      - name: Anchor build
+      - name: Anchor build (produces target/deploy/*.so for LiteSVM tests)
         run: anchor build
+
+      - name: Workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit dependencies
+        run: cargo audit

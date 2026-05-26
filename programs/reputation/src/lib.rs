@@ -7,17 +7,33 @@
 use anchor_lang::prelude::*;
 use solana_security_txt::security_txt;
 
+pub mod events;
+pub mod instructions;
+pub mod state;
+
+use instructions::*;
+
 declare_id!("4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ");
 
 security_txt! {
     name: "Agent Fuel — Reputation Program",
-    project_url: "https://github.com/TODO/agent_fuel",
+    project_url: "https://github.com/frankolien/agent_fuel",
     contacts: "email:security@agentfuel.dev",
-    policy: "https://github.com/TODO/agent_fuel/blob/main/SECURITY.md",
+    policy: "https://github.com/frankolien/agent_fuel/blob/main/SECURITY.md",
     preferred_languages: "en",
-    source_code: "https://github.com/TODO/agent_fuel",
+    source_code: "https://github.com/frankolien/agent_fuel",
     auditors: "N/A"
 }
 
 #[program]
-pub mod reputation {}
+pub mod reputation {
+    use super::*;
+
+    pub fn initialize_agent(
+        ctx: Context<InitializeAgent>,
+        agent_uri: [u8; 128],
+        external_agent_id: u64,
+    ) -> Result<()> {
+        instructions::initialize_agent::handler(ctx, agent_uri, external_agent_id)
+    }
+}

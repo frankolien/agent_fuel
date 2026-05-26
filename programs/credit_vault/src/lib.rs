@@ -1,7 +1,3 @@
-// why: Anchor 0.31's `#[program]` macro expands to a deprecated `AccountInfo::realloc` call.
-// We can't reach into the macro expansion to scope this narrowly. Crate scope is acceptable
-// because (1) this crate is exclusively an Anchor program, so there's no unrelated code
-// to mask, and (2) this is removed when Anchor releases a version using `resize()`.
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
@@ -20,6 +16,4 @@ security_txt! {
 }
 
 #[program]
-pub mod credit_vault {
-    
-}
+pub mod credit_vault {}

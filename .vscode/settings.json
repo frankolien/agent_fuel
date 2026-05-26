@@ -2,10 +2,10 @@
   "// rust-analyzer toolchain pinning": "Route rust-analyzer through the same Rust toolchain pinned in rust-toolchain.toml (1.85.0). Without this, VSCode's bundled rust-analyzer uses your default toolchain (likely nightly), and its proc-macro server fails with an ABI mismatch when trying to load proc macros compiled by 1.85.",
   "rust-analyzer.server.path": "rust-analyzer",
   "rust-analyzer.server.extraEnv": {
-    "RUSTUP_TOOLCHAIN": "1.85.0"
+    "RUSTUP_TOOLCHAIN": "1.89.0"
   },
   "rust-analyzer.cargo.extraEnv": {
-    "RUSTUP_TOOLCHAIN": "1.85.0"
+    "RUSTUP_TOOLCHAIN": "1.89.0"
   },
 
   "// check command matches CI gate": "rust-analyzer's inline diagnostics use the same clippy invocation as .github/workflows/ci.yml — so what you see in the editor matches what CI enforces.",
