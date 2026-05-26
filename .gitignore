@@ -21,14 +21,7 @@ target/deploy/*-keypair.json
 # ============================================================================
 # Local tooling not part of project source
 # ============================================================================
-# Installed Claude Code / multi-agent skills — project-scoped tooling, not source
-.agents/
 skills-lock.json
-
-# Internal planning + design docs — kept local, not part of the granted artifact.
-# Rationale: contains competitive analysis with sharp positioning claims and pre-decision
-# ADR drafts. Public-facing project docs live in README.md and per-crate READMEs.
-docs/
 
 # ============================================================================
 # Editor / OS
