@@ -14,4 +14,8 @@ pub enum ReputationError {
     ReceiptMismatch,
     #[msg("Feedback value is outside the allowed range")]
     InvalidFeedbackValue,
+    #[msg("Responder must be the agent or its owner")]
+    UnauthorizedResponder,
+    #[msg("Feedback already has a response")]
+    AlreadyHasResponse,
 }

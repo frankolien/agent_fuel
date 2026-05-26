@@ -37,3 +37,11 @@ pub struct FeedbackGiven {
     pub tags: u32,
     pub slot: u64,
 }
+
+#[event]
+pub struct ResponseAppended {
+    pub agent: Pubkey,
+    pub feedback: Pubkey,
+    pub responder: Pubkey,
+    pub slot: u64,
+}

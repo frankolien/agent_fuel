@@ -71,4 +71,18 @@ pub mod reputation {
             evidence_hash,
         )
     }
+
+    pub fn append_response(
+        ctx: Context<AppendResponse>,
+        payment_receipt_hash: [u8; 32],
+        response_uri: [u8; 128],
+        response_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::append_response::handler(
+            ctx,
+            payment_receipt_hash,
+            response_uri,
+            response_hash,
+        )
+    }
 }
