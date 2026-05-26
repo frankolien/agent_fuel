@@ -1,0 +1,61 @@
+# ============================================================================
+# Build artifacts
+# ============================================================================
+/target
+**/target
+.anchor
+test-ledger
+**/*.so
+
+# ============================================================================
+# Anchor / Solana
+# ============================================================================
+# Generated IDLs (regenerated on every `anchor build`)
+# Keep `target/idl/` checked-in only when explicitly versioning IDLs for SDK consumers — not in Slice 1.
+target/idl/
+
+# Program keypairs — NEVER commit these. Devnet/Mainnet keypairs are managed out-of-band.
+target/deploy/*-keypair.json
+
+# ============================================================================
+# Local tooling not part of project source
+# ============================================================================
+# Installed Claude Code / multi-agent skills — project-scoped tooling, not source
+.agents/
+skills-lock.json
+
+# Internal planning + design docs — kept local, not part of the granted artifact.
+# Rationale: contains competitive analysis with sharp positioning claims and pre-decision
+# ADR drafts. Public-facing project docs live in README.md and per-crate READMEs.
+docs/
+
+# ============================================================================
+# Editor / OS
+# ============================================================================
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# ============================================================================
+# Node / pnpm (for Anchor TS tests, SDK, dashboard later)
+# ============================================================================
+node_modules/
+.pnpm-store/
+*.tsbuildinfo
+.next/
+dist/
+build/
+
+# ============================================================================
+# Environment / secrets
+# ============================================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
