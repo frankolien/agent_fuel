@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import { Home } from "@/pages/Home/Home";
 import { SignIn } from "@/pages/SignIn/SignIn";
+import { PublicReputation } from "@/pages/PublicReputation/PublicReputation";
 import { ConsoleLayout } from "@/pages/Console/ConsoleLayout";
 import { Fleet } from "@/pages/Console/screens/Fleet";
 import { Agents } from "@/pages/Console/screens/Agents";
@@ -16,6 +17,7 @@ import { RequireAuth } from "./auth";
 export const router = createBrowserRouter([
   { path: "/", element: <Home /> },
   { path: "/signin", element: <SignIn /> },
+  { path: "/reputation/:agent", element: <PublicReputation /> },
   {
     path: "/console",
     element: (

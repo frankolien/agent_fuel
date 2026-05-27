@@ -82,7 +82,14 @@ Phase 4 splits into three tracks that can move in parallel once their first slic
 
 ### Slices — SDK (4.S)
 
-_Broken down when we start it — depends on Agents UI surfacing what the SDK needs to mirror._
+Lives at `clients/sdk/`. Published as `@agent-fuel/sdk` on npm. TypeScript, strict, minimal runtime deps (`@solana/web3.js`, `@coral-xyz/anchor`). IDL files vendored at build time from `target/idl/` so SDK releases pin a specific program ABI without requiring `anchor build` to run in SDK CI.
+
+1. **Scaffold.** Package layout, `tsup` build (ESM + CJS + .d.ts), tsconfig strict, eslint/prettier, CI typecheck + lint + build on `clients/sdk/**` changes. Skeleton `AgentFuel` class with constructor: `new AgentFuel({ agent: Keypair, cluster, rpc, apiBase? })`. Vendored IDL JSON for both Anchor programs.
+2. **Read methods.** `getScore(agent)` (backend REST → `/reputation/:agent`), `getVaultBalance(agent)`, `getPolicy(agent)`, `checkService(service)` (Anchor account fetches via `Program.account.X.fetch`). Each returns typed structs that mirror on-chain layouts.
+3. **`spend(service, amount)`.** Constructs the vault `spend` instruction, signs with the agent keypair, sends + confirms. Local policy guardrails (per-tx, per-hour, frozen) fail-fast before submission so callers get a typed error before the network round-trip.
+4. **`onEvent(agent, callback)`.** Opens a WS to the backend `/ws/agents/:pk`, parses each frame, fires the callback. Reconnect with backoff, same shape as `clients/web/src/lib/api/live.ts`.
+5. **x402 fetch helper + working example.** `paymentRequired(handler)` — a fetch / axios middleware that catches HTTP 402, extracts the service pubkey + amount from the `X-Payment-Required` header, calls `spend()`, retries the request with the resulting `X-Payment` header. End-to-end example under `clients/sdk/examples/x402-quickstart/` that runs against devnet with a seeded keypair. README with the same six-function table the landing page advertises.
+6. **Publish + release workflow.** GitHub Actions workflow that publishes `@agent-fuel/sdk@v0.1.0` to npm on tag push, with provenance. CHANGELOG entry per version. Version pinned in `clients/web/package.json` after publish so the console's SDK reference screen (4.W track) can `import type { … } from "@agent-fuel/sdk"` for documentation generation.
 
 ### Slices — Mobile (4.M)
 

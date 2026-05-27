@@ -12,7 +12,7 @@ const GROUPS: ReadonlyArray<Group> = [
       { label: "Reputation", href: "#reputation" },
       { label: "Credit Vaults", href: "#vaults" },
       { label: "Policies", href: "#policies" },
-      { label: "x402 Flow", href: "#x402" },
+      { label: "x402 Flow", href: "#how" },
     ],
   },
   {

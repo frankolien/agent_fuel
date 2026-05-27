@@ -38,8 +38,8 @@ export function Nav() {
           )}
         </div>
         <div className="flex items-center gap-2.5">
-          <Pill href="#prd" size="sm">
-            Read PRD
+          <Pill href="#sdk" size="sm">
+            Read the docs
           </Pill>
           <Pill to="/console" variant="solid" size="sm">
             Launch App

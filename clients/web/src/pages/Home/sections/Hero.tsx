@@ -36,8 +36,8 @@ export function Hero() {
             <Pill href="#sdk" size="lg">
               Read the docs <span className="font-mono">↗</span>
             </Pill>
-            <Pill href="#prd" variant="glow" size="lg">
-              View PRD
+            <Pill href="#how" variant="glow" size="lg">
+              How it works
             </Pill>
           </div>
         </div>

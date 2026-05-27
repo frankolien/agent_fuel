@@ -22,7 +22,7 @@ export const CATEGORIES: ReadonlyArray<Category> = [
   { id: "vaults", label: "Credit Vaults", href: "#vaults", Icon: VaultIcon },
   { id: "policies", label: "Policies", href: "#policies", Icon: PoliciesIcon },
   { id: "sdk", label: "Agent SDK", href: "#sdk", Icon: SdkIcon },
-  { id: "x402", label: "x402", href: "#x402", Icon: X402Icon },
+  { id: "x402", label: "x402", href: "#how", Icon: X402Icon },
 ];
 
 export type Feature = {

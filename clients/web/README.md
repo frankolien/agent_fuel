@@ -36,6 +36,7 @@ src/
 │   │   ├── content.ts    Typed content for cards, stats, sdk fns, tutorials
 │   │   └── sections/     Hero, CategoryStrip, Protocol, HowItWorks, Stats, Sdk, Tutorials, Cta
 │   ├── SignIn/           SIWS sign-in page (/signin)
+│   ├── PublicReputation/ Unauthenticated /reputation/:agent deep-link target
 │   └── Console/          Operator console — sidebar + topbar shell, nested screen routes
 │       ├── ConsoleLayout.tsx
 │       ├── Sidebar.tsx
