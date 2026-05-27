@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 type ScreenProps = {
-  eyebrow?: string;
-  title: string;
-  subtitle?: string;
+  eyebrow?: ReactNode;
+  title: ReactNode;
+  subtitle?: ReactNode;
   actions?: ReactNode;
   children?: ReactNode;
 };
@@ -14,7 +14,7 @@ export function Screen({ eyebrow, title, subtitle, actions, children }: ScreenPr
       <div className="mb-[18px] flex items-end justify-between gap-4 border-b border-white/[0.09] pb-[18px]">
         <div>
           {eyebrow ? (
-            <div className="inline-flex items-center gap-2 text-[11px] tracking-[0.05em] text-muted uppercase">
+            <div className="inline-flex flex-wrap items-center gap-2 text-[11px] tracking-[0.05em] text-muted uppercase">
               {eyebrow}
             </div>
           ) : null}

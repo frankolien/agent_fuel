@@ -1,6 +1,12 @@
+import { useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useAuth } from "@/app/auth";
 import { CaretDownIcon, InboxIcon, SearchIcon, SettingsIcon } from "./icons";
+import { Ticker } from "./components/Ticker";
+import { useFleetTicker } from "./useFleetTicker";
 
 export function Topbar() {
+  const ticker = useFleetTicker();
   return (
     <header className="sticky top-0 z-10 grid grid-cols-[380px_1fr_auto] items-center gap-4 border-b border-white/[0.09] bg-[#0e0f11] px-[22px]">
       <label className="flex h-8 items-center gap-2 rounded-md border border-white/[0.09] bg-surface-2 px-2.5 text-muted">
@@ -14,8 +20,7 @@ export function Topbar() {
         </span>
       </label>
 
-      {/* Ticker slot — will host the live event marquee in slice 4.W.8. */}
-      <div />
+      <Ticker items={ticker} />
 
       <div className="flex items-center gap-1.5">
         <button
@@ -35,12 +40,73 @@ export function Topbar() {
         >
           <SettingsIcon />
         </button>
-        <div className="flex h-8 items-center gap-2 rounded-md border border-white/[0.09] bg-surface-2 pr-2.5 pl-2">
-          <span className="h-[7px] w-[7px] rounded-full bg-mint [box-shadow:0_0_10px_var(--color-mint-glow)]" />
-          <span className="font-mono text-[11.5px]">8Fk9…rT3w</span>
-          <CaretDownIcon />
-        </div>
+        <WalletMenu />
       </div>
     </header>
   );
+}
+
+function WalletMenu() {
+  const { walletPubkey, signOut } = useAuth();
+  const wallet = useWallet();
+  const [open, setOpen] = useState(false);
+
+  const display = walletPubkey ?? wallet.publicKey?.toBase58() ?? "—";
+  const walletName = wallet.wallet?.adapter.name ?? "Wallet";
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-8 items-center gap-2 rounded-md border border-white/[0.09] bg-surface-2 pr-2.5 pl-2 hover:bg-surface-3"
+      >
+        <span className="h-[7px] w-[7px] rounded-full bg-mint [box-shadow:0_0_10px_var(--color-mint-glow)]" />
+        <span className="font-mono text-[11.5px]">{shortPk(display)}</span>
+        <CaretDownIcon />
+      </button>
+      {open ? (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute top-full right-0 z-20 mt-2 w-[260px] rounded-[10px] border border-white/[0.09] bg-[#15171a] p-2 text-[12.5px] shadow-[0_12px_32px_-8px_rgba(0,0,0,0.7)]">
+            <div className="grid gap-0.5 px-2 py-2">
+              <span className="text-muted text-[11px] uppercase tracking-[0.06em] font-mono">
+                {walletName}
+              </span>
+              <span className="font-mono text-fg-2 break-all">{display}</span>
+            </div>
+            <hr className="m-0 border-0 border-t border-white/[0.09]" />
+            <button
+              type="button"
+              onClick={async () => {
+                setOpen(false);
+                await navigator.clipboard.writeText(display).catch(() => {});
+              }}
+              className="block w-full rounded-md px-2 py-1.5 text-left text-fg-2 hover:bg-surface-2 hover:text-fg"
+            >
+              Copy address
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                signOut();
+              }}
+              className="block w-full rounded-md px-2 py-1.5 text-left text-fg-2 hover:bg-surface-2 hover:text-fg"
+            >
+              Sign out
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function shortPk(pk: string): string {
+  return pk.length > 12 ? `${pk.slice(0, 4)}…${pk.slice(-4)}` : pk;
 }

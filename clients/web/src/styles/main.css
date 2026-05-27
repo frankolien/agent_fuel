@@ -155,6 +155,117 @@
       var(--color-bg);
   }
 
+  /* Sign-in ambient layer: floating mint orbs + faint dot grid + card breath. */
+  .signin-grid {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+  }
+  .signin-conic {
+    background: conic-gradient(
+      from 0deg at 50% 50%,
+      rgba(166, 225, 207, 0.04),
+      transparent 40%,
+      rgba(166, 225, 207, 0.06) 60%,
+      transparent
+    );
+    animation: signin-spin 60s linear infinite;
+  }
+  .signin-orb {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(100px);
+    will-change: transform;
+  }
+
+  @keyframes signin-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes signin-float-a {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    33% {
+      transform: translate3d(80px, -60px, 0) scale(1.1);
+    }
+    66% {
+      transform: translate3d(-40px, 40px, 0) scale(0.95);
+    }
+  }
+  @keyframes signin-float-b {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(-100px, 60px, 0) scale(1.15);
+    }
+  }
+  @keyframes signin-float-c {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(0.95);
+    }
+    50% {
+      transform: translate3d(70px, -50px, 0) scale(1.05);
+    }
+  }
+  @keyframes signin-card-breath {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 1px rgba(166, 225, 207, 0.06),
+        0 0 60px rgba(166, 225, 207, 0.04),
+        0 24px 60px rgba(0, 0, 0, 0.5);
+    }
+    50% {
+      box-shadow:
+        0 0 0 1px rgba(166, 225, 207, 0.14),
+        0 0 100px rgba(166, 225, 207, 0.1),
+        0 24px 60px rgba(0, 0, 0, 0.5);
+    }
+  }
+  .signin-card {
+    animation: signin-card-breath 6s ease-in-out infinite;
+  }
+
+  /* Respect users who don't want motion — flatten all sign-in animations. */
+  @media (prefers-reduced-motion: reduce) {
+    .signin-orb,
+    .signin-conic,
+    .signin-card {
+      animation: none !important;
+    }
+  }
+
+  /* Topbar marquee. The strip translates -50% over a long duration; the items
+     inside are duplicated by the component so the loop is seamless. */
+  .ticker-mask {
+    mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+  }
+  .ticker-strip {
+    animation: ticker-scroll 38s linear infinite;
+    will-change: transform;
+  }
+  @keyframes ticker-scroll {
+    0% {
+      transform: translate3d(0, 0, 0);
+    }
+    100% {
+      transform: translate3d(-50%, 0, 0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ticker-strip {
+      animation: none !important;
+    }
+  }
+
   /* Active-nav indicator pulse (mint dot on Activity nav item). */
   .nav-pulse {
     width: 6px;
