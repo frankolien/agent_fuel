@@ -26,8 +26,13 @@ pub trait Notifier: Send + Sync + 'static {
 }
 
 /// Dev-default notifier. Logs the alert at INFO level instead of calling
-/// FCM. Swapped for a real `FcmNotifier` once `FCM_SERVICE_ACCOUNT_JSON`
-/// is provisioned (Phase 3 account checklist).
+/// FCM.
+///
+/// **Deployed configuration is log-only in v0.1.** A real `FcmNotifier`
+/// implementing this trait slots in once `FCM_SERVICE_ACCOUNT_JSON` is
+/// provisioned; until then push notifications are visible only in backend
+/// logs, not on the user's device. Tracked in `docs/maintenance.md` and
+/// surfaced in `docs/backend-local-dev.md`'s "Known limitations" section.
 pub struct LogNotifier;
 
 #[async_trait]

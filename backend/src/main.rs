@@ -6,7 +6,7 @@ use actix_cors::Cors;
 use actix_governor::GovernorConfigBuilder;
 use actix_web::{http::header, middleware, web, App, HttpServer};
 use agent_fuel_backend::{
-    config::Config, db, notifier::LogNotifier, routes, score, state::AppState,
+    config::Config, db, notifier::LogNotifier, routes, routes::Limits, score, state::AppState,
 };
 use tracing_actix_web::TracingLogger;
 
@@ -71,7 +71,10 @@ async fn main() -> anyhow::Result<()> {
     });
     let bind = cfg.bind_addr.clone();
     let cors_origins = cfg.cors_allowed_origins.clone();
-    tracing::info!(origins = ?cors_origins, "CORS configured");
+    let limits = Limits {
+        webhook_body_max_bytes: cfg.webhook_body_max_bytes,
+    };
+    tracing::info!(origins = ?cors_origins, webhook_body_max_bytes = limits.webhook_body_max_bytes, "CORS + limits configured");
 
     // Built once so the underlying Arc<RateLimiter> is shared across all
     // worker threads — otherwise each worker has its own bucket and the
@@ -82,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
         .finish()
         .expect("static governor config");
 
-    HttpServer::new(move || {
+    let server = HttpServer::new(move || {
         // `Cors` is rebuilt per worker — it's a cheap struct of vecs, and
         // origin matching happens on every request anyway.
         let mut cors = Cors::default()
@@ -99,13 +102,54 @@ async fn main() -> anyhow::Result<()> {
             .wrap(cors)
             .wrap(TracingLogger::default())
             .wrap(middleware::NormalizePath::trim())
-            .configure(|cfg| routes::configure(cfg, &reputation_rate_limit))
+            .configure(|cfg| routes::configure(cfg, &reputation_rate_limit, &limits))
     })
     .bind(&bind)?
-    .run()
-    .await?;
+    // Workers finish in-flight requests before exiting on `handle.stop(true)`.
+    // Pair with container `terminationGracePeriodSeconds` ≥ 35s.
+    .shutdown_timeout(30)
+    .run();
 
+    let server_handle = server.handle();
+    let server_task = tokio::spawn(server);
+
+    wait_for_shutdown_signal().await;
+    tracing::info!("shutdown signal received — draining in-flight requests");
+    server_handle.stop(true).await;
+
+    // Server's spawn-handle resolves once workers have drained.
+    match server_task.await {
+        Ok(Ok(())) => tracing::info!("server exited cleanly"),
+        Ok(Err(err)) => tracing::error!(error = %err, "server exited with error"),
+        Err(err) => tracing::error!(error = %err, "server task panicked"),
+    }
     Ok(())
+}
+
+// Returns once SIGINT (ctrl-C) or SIGTERM (container stop) is observed.
+// On non-unix this falls back to ctrl-C only.
+async fn wait_for_shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut sigterm = match signal(SignalKind::terminate()) {
+            Ok(s) => s,
+            Err(err) => {
+                tracing::warn!(error = %err, "could not install SIGTERM handler — using SIGINT only");
+                let _ = tokio::signal::ctrl_c().await;
+                return;
+            }
+        };
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => tracing::info!("received SIGINT"),
+            _ = sigterm.recv() => tracing::info!("received SIGTERM"),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+        tracing::info!("received ctrl-c");
+    }
 }
 
 fn init_tracing() {

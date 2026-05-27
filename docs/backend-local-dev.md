@@ -310,6 +310,42 @@ The agent + vault pubkeys are deterministic fakes derived from your wallet
 flow naturally once the SDK lands and you fire actual `spend()` calls in a
 loop.
 
+## Known limitations (v0.1)
+
+The backend ships with two deliberate gaps that don't block deploy but you
+should know about before promising features to users:
+
+- **Push notifications are log-only.** `Alert::dispatch` runs through
+  [`LogNotifier`](../backend/src/notifier.rs), which writes the payload to
+  `tracing::info!` and returns. A real `FcmNotifier` will slot in once
+  `FCM_SERVICE_ACCOUNT_JSON` is provisioned. Until then, budget-threshold and
+  score-change alerts are visible only in the backend log, not on the user's
+  device.
+- **`/ws/agents/{pubkey}` is unauthenticated.** Anyone with the agent pubkey
+  can subscribe to its event stream. This is intentional — the underlying
+  on-chain events are public — but worth noting before pointing the WS at
+  any non-public deployment.
+
+## Deploying the backend
+
+The repo ships a multi-stage Docker build at [`backend/Dockerfile`](../backend/Dockerfile).
+Build from the repo root so the workspace `Cargo.lock` is in context:
+
+```bash
+docker build -f backend/Dockerfile -t agent-fuel-backend .
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL=postgres://… \
+  -e REDIS_URL=redis://… \
+  -e HELIUS_WEBHOOK_SECRET=… \
+  -e JWT_SECRET=… \
+  -e CORS_ALLOWED_ORIGINS=https://your-frontend.example \
+  agent-fuel-backend
+```
+
+The container runs as a non-root user (uid 10001) and reacts to `SIGTERM`
+with a 30-second graceful drain — pair with your orchestrator's
+`terminationGracePeriodSeconds ≥ 35`.
+
 ## Tearing it all down
 
 ```bash

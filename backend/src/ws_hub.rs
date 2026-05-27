@@ -1,11 +1,18 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::parser::ParsedEvent;
 
-pub type Subscriber = UnboundedSender<String>;
+/// Per-subscriber buffer. Big enough to absorb normal jitter (a couple of
+/// seconds of typical event rate); small enough that 1000 concurrent
+/// subscribers cap memory at ~64 MB worst case. A subscriber that can't keep
+/// up gets dropped (see `broadcast`) — better to force a reconnect than to
+/// pile messages indefinitely.
+const WS_CHANNEL_CAPACITY: usize = 256;
+
+pub type Subscriber = Sender<String>;
 
 #[derive(Default, Clone)]
 pub struct WsHub {
@@ -13,21 +20,41 @@ pub struct WsHub {
 }
 
 impl WsHub {
-    pub fn subscribe(&self, agent: &str) -> UnboundedReceiver<String> {
-        let (tx, rx) = unbounded_channel();
+    pub fn subscribe(&self, agent: &str) -> Receiver<String> {
+        let (tx, rx) = channel(WS_CHANNEL_CAPACITY);
         let mut map = self.inner.lock().expect("ws hub poisoned");
         map.entry(agent.to_string()).or_default().push(tx);
         rx
     }
 
-    /// Sends `payload` to every active subscriber of `agent` and drops any
-    /// receiver whose connection has already gone away.
+    /// Sends `payload` to every active subscriber of `agent` via `try_send`
+    /// (never blocks the broadcast worker). Drops any subscriber whose
+    /// channel is full (slow consumer) or already closed (receiver gone) —
+    /// when the sender is dropped, the receiver task's next `recv()` returns
+    /// `None`, the WS loop in `routes::ws` breaks, and the WebSocket closes,
+    /// nudging the client to reconnect.
     pub fn broadcast(&self, agent: &str, payload: &str) -> usize {
         let mut map = self.inner.lock().expect("ws hub poisoned");
         let Some(subs) = map.get_mut(agent) else {
             return 0;
         };
-        subs.retain(|tx| tx.send(payload.to_string()).is_ok());
+        let mut dropped = 0usize;
+        subs.retain(|tx| {
+            if tx.try_send(payload.to_string()).is_ok() {
+                true
+            } else {
+                dropped += 1;
+                false
+            }
+        });
+        if dropped > 0 {
+            tracing::warn!(
+                agent,
+                dropped,
+                remaining = subs.len(),
+                "ws subscriber dropped (channel full or closed)"
+            );
+        }
         let remaining = subs.len();
         if remaining == 0 {
             map.remove(agent);
@@ -104,5 +131,20 @@ mod tests {
         hub.broadcast("B", "for B");
         // No frame should be queued for A's receiver.
         assert!(rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn slow_subscriber_is_dropped_when_channel_fills() {
+        // Subscriber never reads. After filling the channel, the next
+        // broadcast should drop them and report 0 live subscribers.
+        let hub = WsHub::default();
+        let _rx_held = hub.subscribe("A");
+        for _ in 0..WS_CHANNEL_CAPACITY {
+            assert_eq!(hub.broadcast("A", "x"), 1);
+        }
+        // Channel is now full. The next broadcast's try_send fails → subscriber dropped.
+        assert_eq!(hub.broadcast("A", "overflow"), 0);
+        // Subsequent broadcasts are no-ops; the agent key is also cleaned up.
+        assert_eq!(hub.broadcast("A", "again"), 0);
     }
 }

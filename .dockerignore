@@ -1,0 +1,23 @@
+# Build cache / artifacts we never want in the Docker context.
+target/
+**/node_modules/
+**/dist/
+.git/
+.github/
+
+# Frontend / SDK — backend image doesn't ship them.
+clients/
+
+# Editor / OS noise.
+.vscode/
+.idea/
+**/.DS_Store
+
+# Sensitive: never bake secrets into an image.
+.env
+.env.*
+!.env.example
+
+# Logs + scratch.
+*.log
+run.log

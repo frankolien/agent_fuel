@@ -9,13 +9,23 @@ mod reputation;
 mod webhooks;
 mod ws;
 
+#[derive(Clone, Copy)]
+pub struct Limits {
+    pub webhook_body_max_bytes: usize,
+}
+
 pub fn configure(
     cfg: &mut web::ServiceConfig,
     reputation_rate_limit: &GovernorConfig<PeerIpKeyExtractor, NoOpMiddleware>,
+    limits: &Limits,
 ) {
     cfg.service(health::live)
         .service(health::ready)
-        .service(webhooks::helius)
+        .service(
+            web::resource("/webhooks/helius")
+                .app_data(web::PayloadConfig::new(limits.webhook_body_max_bytes))
+                .route(web::post().to(webhooks::helius)),
+        )
         .service(auth::nonce)
         .service(auth::verify)
         .service(ws::agent_stream)

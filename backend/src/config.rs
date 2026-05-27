@@ -14,6 +14,11 @@ pub struct Config {
     /// Vite dev server. Set `CORS_ALLOWED_ORIGINS` to a comma-separated list
     /// to allow more (e.g. `https://app.agent-fuel.io,https://staging.…`).
     pub cors_allowed_origins: Vec<String>,
+    /// Maximum allowed body size for `/webhooks/helius` POSTs. Helius payloads
+    /// for typical Solana txs are a few KB; the ceiling here bounds the
+    /// indexer's exposure to oversized POSTs. Override with
+    /// `WEBHOOK_BODY_MAX_BYTES`. Default: 2 MiB.
+    pub webhook_body_max_bytes: usize,
 }
 
 impl Config {
@@ -44,6 +49,11 @@ impl Config {
             .map(|s| s.split(',').map(|o| o.trim().to_string()).collect())
             .unwrap_or_else(|| vec!["http://localhost:5173".to_string()]);
 
+        let webhook_body_max_bytes = env::var("WEBHOOK_BODY_MAX_BYTES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2 * 1024 * 1024);
+
         Ok(Self {
             bind_addr,
             database_url,
@@ -54,6 +64,7 @@ impl Config {
             siws_domain,
             siws_chain_id,
             cors_allowed_origins,
+            webhook_body_max_bytes,
         })
     }
 }

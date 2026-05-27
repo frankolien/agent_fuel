@@ -1,9 +1,8 @@
-use actix_web::{http::header, post, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{http::header, web, HttpRequest, HttpResponse, Responder};
 use subtle::ConstantTimeEq;
 
 use crate::{alerts, mirror, parser, persist, score, state::AppState};
 
-#[post("/webhooks/helius")]
 pub async fn helius(
     req: HttpRequest,
     state: web::Data<AppState>,
