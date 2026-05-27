@@ -23,7 +23,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { AnchorProvider, BN, Program, Wallet } from "@coral-xyz/anchor";
 import {
   createAssociatedTokenAccountIdempotentInstruction,
@@ -419,7 +419,3 @@ function parseArgs(argv) {
   }
   return out;
 }
-
-// Silence the `resolve()` warning about unused import — keeps the import
-// in place so the script's dependency on `node:path` is explicit.
-void resolve;
