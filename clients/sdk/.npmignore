@@ -1,0 +1,10 @@
+src
+scripts
+tsup.config.ts
+tsconfig.json
+eslint.config.js
+.prettierrc.json
+.gitignore
+.npmignore
+node_modules
+*.tsbuildinfo
