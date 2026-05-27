@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #000000;
+  --color-surface: #0c0d0e;
+  --color-surface-2: #121315;
+  --color-surface-3: #1e2024;
+
+  --color-fg: #ffffff;
+  --color-fg-2: #d7dbdd;
+  --color-muted: #8b9094;
+  --color-muted-2: #5c6063;
+
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-2: rgba(255, 255, 255, 0.14);
+
+  --color-mint: #d9f0e8;
+  --color-mint-soft: #b8e2d4;
+
+  /* Glow accents are color tokens too so `shadow-[0_0_24px_var(--color-mint-glow)]` reads naturally. */
+  --color-mint-glow: rgba(166, 225, 207, 0.55);
+  --color-mint-glow-2: rgba(166, 225, 207, 0.18);
+
+  --color-syntax-string: #e8c58e;
+  --color-syntax-fn: #bfe9dd;
+
+  --font-sans:
+    "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --container-shell: 1480px;
+
+  /* The design's single breakpoint sits at 960px (mobile ↔ desktop). Override
+     Tailwind's default `md` so `md:` variants line up with the prototype. */
+  --breakpoint-md: 960px;
+}
+
+/* Page padding is responsive and used everywhere — kept as a plain CSS var so
+   it can be referenced via Tailwind's arbitrary-value syntax (px-[var(--pad)]). */
+:root {
+  --pad: clamp(24px, 4vw, 64px);
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+  body {
+    font-family: var(--font-sans);
+    font-feature-settings:
+      "ss01",
+      "ss02",
+      "cv11";
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    letter-spacing: -0.005em;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  button {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+  }
+}
+
+/* Composite utilities. Anything where Tailwind's arbitrary syntax would make
+   the JSX unreadable — multi-stop radials, layered shadows, halos — lives here. */
+@layer utilities {
+  /* Page-wide ambient mint wash, fixed behind everything. */
+  .bg-fx {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(1000px 600px at 50% -10%, rgba(166, 225, 207, 0.06), transparent 60%),
+      radial-gradient(800px 400px at 90% 10%, rgba(166, 225, 207, 0.04), transparent 65%);
+  }
+
+  /* Hero outer card: vertical gradient on near-black surface. */
+  .hero-card-bg {
+    background: linear-gradient(180deg, #131517 0%, #0a0b0d 100%);
+  }
+
+  /* Halo behind the reputation viz. */
+  .viz-halo {
+    background:
+      radial-gradient(50% 50% at 50% 45%, rgba(166, 225, 207, 0.3), transparent 70%),
+      radial-gradient(35% 35% at 30% 80%, rgba(166, 225, 207, 0.14), transparent 70%);
+    filter: blur(28px);
+  }
+
+  /* Glass card for the reputation viz body. */
+  .viz-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+    box-shadow:
+      0 32px 80px rgba(0, 0, 0, 0.55),
+      0 0 0 1px rgba(255, 255, 255, 0.02) inset,
+      0 0 60px rgba(166, 225, 207, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* Soft radial wash around the hero art block. */
+  .hero-art-halo::before {
+    content: "";
+    position: absolute;
+    inset: -10%;
+    background:
+      radial-gradient(60% 60% at 50% 50%, rgba(166, 225, 207, 0.22), transparent 65%),
+      radial-gradient(40% 40% at 30% 80%, rgba(166, 225, 207, 0.1), transparent 70%);
+    filter: blur(20px);
+    pointer-events: none;
+  }
+
+  /* CTA card: radial vignette + vertical gradient + inner top highlight. */
+  .cta-card-bg {
+    background:
+      radial-gradient(50% 80% at 50% 50%, rgba(166, 225, 207, 0.12), transparent 65%),
+      linear-gradient(180deg, #101214 0%, #07080a 100%);
+  }
+  .cta-card-bg::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: radial-gradient(120% 50% at 50% 0%, rgba(166, 225, 207, 0.06), transparent 60%);
+    pointer-events: none;
+  }
+
+  /* Mint text glow, two strengths. */
+  .text-glow-mint {
+    text-shadow: 0 0 24px var(--color-mint-glow);
+  }
+  .text-glow-mint-xl {
+    text-shadow:
+      0 0 28px var(--color-mint-glow),
+      0 0 80px var(--color-mint-glow-2);
+  }
+
+  /* Console page background: ambient mint wash on near-black. */
+  .console-bg {
+    background:
+      radial-gradient(900px 500px at 75% -10%, rgba(217, 240, 232, 0.06), transparent 65%),
+      radial-gradient(600px 400px at 0% 100%, rgba(217, 240, 232, 0.03), transparent 70%),
+      var(--color-bg);
+  }
+
+  /* Active-nav indicator pulse (mint dot on Activity nav item). */
+  .nav-pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-mint);
+    box-shadow: 0 0 0 0 var(--color-mint-glow);
+    animation: nav-pulse 1.8s infinite;
+  }
+  @keyframes nav-pulse {
+    0% {
+      box-shadow: 0 0 0 0 var(--color-mint-glow);
+    }
+    70% {
+      box-shadow: 0 0 0 6px rgba(166, 225, 207, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(166, 225, 207, 0);
+    }
+  }
+
+  /* Pill ring + dual glow used on the "View PRD" / "View SDK" CTAs. */
+  .pill-glow {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 0 24px var(--color-mint-glow),
+      0 0 60px var(--color-mint-glow-2);
+  }
+  .pill-glow:hover {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 0 32px var(--color-mint-glow),
+      0 0 80px var(--color-mint-glow-2);
+  }
+}

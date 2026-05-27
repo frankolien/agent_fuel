@@ -59,9 +59,34 @@
 
 **Phase exit criteria:** React dashboard deployed to Vercel preview, Flutter app runs on iOS + Android sim, TS SDK published as `@agentfuel/sdk` v0.1 to npm with a working README example.
 
-### Slices
+Phase 4 splits into three tracks that can move in parallel once their first slice ships: **Web (4.W)**, **Mobile (4.M)**, **SDK (4.S)**. We're sequencing **Web first**, then SDK + Mobile.
 
-_To be broken down at the start of Phase 4 — depends on which Phase 3 surfaces shipped._
+### Stack
+
+- **Web**: Vite + React 18 + TypeScript (strict) + Tailwind CSS v4 + React Router + TanStack Query + `@solana/wallet-adapter-react` (Phantom / Backpack / Solflare).
+- **Mobile**: Flutter (see `reference_web3flutter_skills` memory).
+- **SDK**: TypeScript, `@coral-xyz/anchor` v0.31, zero-dep core, published as `@agentfuel/sdk`.
+
+### Slices — Web (4.W)
+
+1. **Scaffold.** `clients/web/` with Vite + React + TS strict + Tailwind v4 + Router + ESLint/Prettier. CI runs typecheck + lint + build on `clients/web/**` changes.
+2. **Home.** Public landing route from `Agent Fuel.html` (design bundle), routed via React Router.
+3. **App shell.** Console layout (nav, sidebar, content area) from `Agent Fuel Console.html`. Empty routes `/console/agents`, `/console/vaults`, `/console/activity`. No data yet.
+4. **Data layer.** Typed `fetch` wrapper, TanStack Query setup, shared `types/` module mirroring backend response shapes, global error boundary, dev-mode mock provider so the UI works without a running backend.
+5. **SIWS auth.** Wallet adapter + adapter modal, `/auth/nonce` → wallet `signMessage` → `/auth/verify`, JWT in storage + `Authorization` header, route guard on `/console/*`.
+6. **Agents UI.** Agents list + agent detail page with activity timeline + score sparkline. Reads `/api/agents`, `/api/agents/:pk/activity`, `/api/agents/:pk/score-history`.
+7. **Vaults UI.** Vaults list + vault detail with policy panel + activity. Reads `/api/vaults`, `/api/vaults/:pk`, `/api/vaults/:pk/activity`.
+8. **Live stream.** WS subscription per detail page (`/ws/agents/:pk`), merge into TanStack Query cache; connection-state badge.
+9. **Public reputation.** Unauthenticated `/reputation/:agent` page that any service can deep-link to (no wallet required).
+10. **Deploy.** Vercel project, env wiring (`VITE_API_BASE`), preview URLs on PRs, README + CHANGELOG entries, dashboard URL in the top-level README.
+
+### Slices — SDK (4.S)
+
+_Broken down when we start it — depends on Agents UI surfacing what the SDK needs to mirror._
+
+### Slices — Mobile (4.M)
+
+_Broken down once Web stabilises — Flutter app reuses the same REST + WS surfaces._
 
 ## Phase 5 — Launch (PRD weeks 17–20)
 
