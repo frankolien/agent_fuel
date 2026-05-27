@@ -8,7 +8,7 @@ use crate::state::{CreditVault, SpendPolicy};
 
 // Post-pay settlement: service has already delivered, now claims payment.
 // Same six policy checks as `spend`, plus the `allow_post_pay` gate.
-// Service signs; the service_token_account.owner must equal the signer.
+// Service signs; the service_token_account.owner must equal the signer..
 #[derive(Accounts)]
 pub struct Claim<'info> {
     pub service: Signer<'info>,
