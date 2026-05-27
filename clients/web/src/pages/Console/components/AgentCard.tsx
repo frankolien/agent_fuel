@@ -26,7 +26,7 @@ export function AgentCard({ agent }: AgentCardProps) {
 
       <div className="flex items-baseline gap-2">
         <span className={`font-mono text-[36px] leading-none font-medium tracking-[-0.025em] ${tone}`}>
-          {agent.score === null ? "—" : String(agent.score).padStart(3, "0")}
+          {agent.score === 0 ? "—" : String(agent.score).padStart(3, "0")}
         </span>
         <span className="font-mono text-[11px] text-muted">/ 1000</span>
       </div>

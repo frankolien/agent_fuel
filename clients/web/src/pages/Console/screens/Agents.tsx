@@ -78,7 +78,7 @@ function AgentRow({ agent }: { agent: Agent }) {
       <Td>
         <div className="flex items-center gap-2">
           <span className={`font-mono text-[16px] tabular-nums ${tierFor(agent.score).tone}`}>
-            {agent.score === null ? "—" : String(agent.score).padStart(3, "0")}
+            {agent.score === 0 ? "—" : String(agent.score).padStart(3, "0")}
           </span>
           <ScoreBadge score={agent.score} />
         </div>

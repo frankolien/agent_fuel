@@ -10,6 +10,10 @@ pub struct Config {
     pub jwt_secret: Option<String>,
     pub siws_domain: String,
     pub siws_chain_id: String,
+    /// Origins allowed to call the API from a browser. Defaults to the local
+    /// Vite dev server. Set `CORS_ALLOWED_ORIGINS` to a comma-separated list
+    /// to allow more (e.g. `https://app.agent-fuel.io,https://staging.…`).
+    pub cors_allowed_origins: Vec<String>,
 }
 
 impl Config {
@@ -34,6 +38,12 @@ impl Config {
         let siws_chain_id =
             env::var("SIWS_CHAIN_ID").unwrap_or_else(|_| "solana:devnet".to_string());
 
+        let cors_allowed_origins = env::var("CORS_ALLOWED_ORIGINS")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.split(',').map(|o| o.trim().to_string()).collect())
+            .unwrap_or_else(|| vec!["http://localhost:5173".to_string()]);
+
         Ok(Self {
             bind_addr,
             database_url,
@@ -43,6 +53,7 @@ impl Config {
             jwt_secret,
             siws_domain,
             siws_chain_id,
+            cors_allowed_origins,
         })
     }
 }

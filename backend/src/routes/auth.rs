@@ -44,6 +44,7 @@ pub async fn nonce(state: web::Data<AppState>, body: web::Json<NonceRequest>) ->
 #[derive(Deserialize)]
 pub struct VerifyRequest {
     pub pubkey: String,
+    pub nonce: String,
     pub signature: String,
 }
 
@@ -60,7 +61,7 @@ pub async fn verify(state: web::Data<AppState>, body: web::Json<VerifyRequest>) 
         domain: state.siws_domain.clone(),
         chain_id: state.siws_chain_id.clone(),
     };
-    match auth::verify_and_mint(&state.pool, &cfg, &body.pubkey, &body.signature).await {
+    match auth::verify_and_mint(&state.pool, &cfg, &body.pubkey, &body.nonce, &body.signature).await {
         Ok(t) => HttpResponse::Ok().json(VerifyResponse {
             token: t.token,
             expires_at: t.expires_at,

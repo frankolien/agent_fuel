@@ -12,7 +12,7 @@ import {
   formatUsdcCompact,
   shortPubkey,
 } from "@/lib/format";
-import type { Agent, EventRow, ScoreHistoryRow } from "@/types/api";
+import type { Agent, EventRow, ScorePoint } from "@/types/api";
 import { Screen } from "./Screen";
 import { ActivityRow } from "../components/ActivityRow";
 import { AddressPill } from "../components/AddressPill";
@@ -78,7 +78,7 @@ export function AgentDetail() {
               <AddressPill label="agent" address={agentQuery.data.pubkey} />
               <AddressPill label="owner" address={agentQuery.data.owner} />
               <div className="mt-3 grid grid-cols-2 gap-3 text-[12.5px]">
-                <Pair label="First active" value={`slot ${formatNumberCompact(agentQuery.data.first_active_slot)}`} />
+                <Pair label="First active" value={`slot ${formatNumberCompact(agentQuery.data.init_slot)}`} />
                 <Pair label="Last active" value={`slot ${formatNumberCompact(agentQuery.data.last_active_slot)}`} />
                 <Pair label="Updated" value={formatDate(agentQuery.data.updated_at)} />
                 <Pair label="Feedback" value={`${agentQuery.data.total_feedback_count} (${agentQuery.data.active_negative_feedback_count} neg)`} />
@@ -91,13 +91,13 @@ export function AgentDetail() {
       </div>
 
       <div className="mt-3.5">
-        <Card title="Activity" meta={activityQuery.data ? `${activityQuery.data.items.length} recent` : "—"}>
+        <Card title="Activity" meta={activityQuery.data ? `${activityQuery.data.length} recent` : "—"}>
           {activityQuery.isLoading ? (
             <SkeletonRows rows={6} height={36} />
-          ) : activityQuery.data && activityQuery.data.items.length > 0 ? (
+          ) : activityQuery.data && activityQuery.data.length > 0 ? (
             <ActivityList
-              referenceSlot={agentQuery.data?.last_active_slot ?? activityQuery.data.items[0]!.slot}
-              items={activityQuery.data.items}
+              referenceSlot={agentQuery.data?.last_active_slot ?? activityQuery.data[0]!.slot}
+              items={activityQuery.data}
             />
           ) : (
             <EmptyState note="No events for this agent yet." />
@@ -116,7 +116,7 @@ function AgentKpis({ agent }: { agent: Agent }) {
         label="Reputation score"
         value={
           <span className="flex items-baseline gap-3">
-            <span>{agent.score === null ? "—" : String(agent.score).padStart(3, "0")}</span>
+            <span>{agent.score === 0 ? "—" : String(agent.score).padStart(3, "0")}</span>
             <ScoreBadge score={agent.score} />
           </span>
         }
@@ -141,7 +141,7 @@ function AgentKpis({ agent }: { agent: Agent }) {
   );
 }
 
-function ScorePanel({ history }: { history: ScoreHistoryRow[] }) {
+function ScorePanel({ history }: { history: ScorePoint[] }) {
   // History from the backend is unordered; sort by slot for a coherent line.
   const sorted = [...history].sort((a, b) => a.slot - b.slot);
   const values = sorted.map((row) => row.score);

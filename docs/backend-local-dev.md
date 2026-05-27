@@ -280,6 +280,36 @@ make sure there's no trailing whitespace and no `Bearer ` prefix.
 `HELIUS_WEBHOOK_SECRET` is unset or empty in the environment. Set it in
 `.env`, restart the backend.
 
+## Seeding the dashboard with real data
+
+The web dashboard (`clients/web`) hits the backend at `VITE_API_BASE` and
+subscribes to `/ws/agents/:pubkey` for live updates. Two prerequisites:
+
+1. **CORS.** The backend allows `http://localhost:5173` by default. Override
+   with `CORS_ALLOWED_ORIGINS=https://app.example.com,http://localhost:5173`
+   in `.env` when deploying.
+2. **Data.** A freshly-signed-in wallet has zero agents and zero vaults —
+   the dashboard will render correctly but look empty. To populate it:
+
+```bash
+# Replace with the wallet you sign in with via SIWS (your Phantom pubkey)
+cargo run -p agent_fuel_backend --example seed_dashboard -- \
+  AxMZj6QHB4Zxe7wpUCidh1cS7ueN2MGsiWLKCMokTA64
+```
+
+This drives the **real** ingest pipeline (`/webhooks/helius` → parser →
+mirror → score → WS broadcast → alerts) with a deterministic burst:
+ServiceRegistered → AgentInitialized → VaultCreated → Deposited →
+PolicyUpdated → 8 × (Spent + PaymentRecorded) → ScoreComputed. Sign in to
+`http://localhost:5173/console` immediately after and you'll see a real
+agent, a real vault with a 70%-spent budget envelope, and a populated
+activity feed. Re-running is idempotent (UPSERT semantics).
+
+The agent + vault pubkeys are deterministic fakes derived from your wallet
+(XOR with a fixed tag) — not real on-chain PDAs. Real on-chain activity will
+flow naturally once the SDK lands and you fire actual `spend()` calls in a
+loop.
+
 ## Tearing it all down
 
 ```bash

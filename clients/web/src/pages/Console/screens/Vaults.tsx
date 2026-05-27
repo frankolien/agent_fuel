@@ -7,7 +7,7 @@ import {
   microUsdcToDollars,
   shortPubkey,
 } from "@/lib/format";
-import type { Vault } from "@/types/api";
+import { vaultBalance, type Vault } from "@/types/api";
 import { Screen } from "./Screen";
 import { Gauge } from "../components/Gauge";
 import { SkeletonRows } from "../components/Skeleton";
@@ -69,7 +69,7 @@ function VaultsTable({ vaults }: { vaults: ReadonlyArray<Vault> }) {
 }
 
 function VaultRow({ vault }: { vault: Vault }) {
-  const limit = vault.policy.lifetime_limit_usdc;
+  const limit = vault.lifetime_limit_usdc;
   const fraction = limit > 0 ? vault.total_spent / limit : 0;
   const pct = Math.round(fraction * 100);
   const tone: "mint" | "warn" | "danger" = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "mint";
@@ -91,37 +91,30 @@ function VaultRow({ vault }: { vault: Vault }) {
         </Link>
       </Td>
       <Td align="right">
-        <span className="font-mono text-[13px]">{formatUsdc(vault.balance_usdc)}</span>
+        <span className="font-mono text-[13px]">{formatUsdc(vaultBalance(vault))}</span>
       </Td>
       <Td>
         <div className="grid min-w-[180px] gap-1">
           <Gauge fraction={fraction} thresholds={[0.7, 0.8, 0.9]} tone={tone} />
           <span className="font-mono text-[10.5px] text-muted">
-            {limit > 0
-              ? `${pct}% of ${formatUsdcCompact(limit)}`
-              : "uncapped"}
+            {limit > 0 ? `${pct}% of ${formatUsdcCompact(limit)}` : "uncapped"}
           </span>
         </div>
       </Td>
       <Td align="right">
-        <span className="font-mono text-[12.5px] text-fg-2">{formatUsdc(vault.policy.per_tx_limit_usdc)}</span>
+        <span className="font-mono text-[12.5px] text-fg-2">{formatUsdc(vault.per_tx_limit_usdc)}</span>
       </Td>
       <Td align="right">
-        <div className="grid justify-items-end gap-0.5">
-          <span className="font-mono text-[12.5px] text-fg-2">{formatUsdc(vault.policy.per_hour_limit_usdc)}</span>
-          <span className="font-mono text-[10.5px] text-muted">
-            {formatUsdc(vault.hourly_used_usdc)} used
-          </span>
-        </div>
+        <span className="font-mono text-[12.5px] text-fg-2">{formatUsdc(vault.hourly_limit_usdc)}</span>
       </Td>
       <Td align="right">
-        <StatusBadge vault={vault} />
+        <StatusBadge vault={vault} pct={pct} />
       </Td>
     </tr>
   );
 }
 
-function StatusBadge({ vault }: { vault: Vault }) {
+function StatusBadge({ vault, pct }: { vault: Vault; pct: number }) {
   if (vault.frozen) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E0857714] px-2 py-0.5 font-mono text-[10.5px] tracking-[0.06em] text-[#E08577] uppercase">
@@ -130,21 +123,21 @@ function StatusBadge({ vault }: { vault: Vault }) {
       </span>
     );
   }
-  if (vault.last_budget_alert_pct >= 90) {
+  if (pct >= 90) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E0857714] px-2 py-0.5 font-mono text-[10.5px] tracking-[0.06em] text-[#E08577] uppercase">
-        {vault.last_budget_alert_pct}% spent
+        {pct}% spent
       </span>
     );
   }
-  if (vault.last_budget_alert_pct >= 70) {
+  if (pct >= 70) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6B86F14] px-2 py-0.5 font-mono text-[10.5px] tracking-[0.06em] text-[#E6B86F] uppercase">
-        {vault.last_budget_alert_pct}% spent
+        {pct}% spent
       </span>
     );
   }
-  const dollars = microUsdcToDollars(vault.balance_usdc);
+  const dollars = microUsdcToDollars(vaultBalance(vault));
   if (dollars > 0) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2 py-0.5 font-mono text-[10.5px] tracking-[0.06em] text-mint uppercase">

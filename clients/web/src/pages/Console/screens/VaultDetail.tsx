@@ -1,15 +1,21 @@
 import { Link, useParams } from "react-router-dom";
 import { useVaultActivityQuery, useVaultQuery } from "@/lib/api/hooks";
 import { useLiveAgent } from "@/lib/api/useLiveAgent";
-import { formatDate, formatUsdc, formatUsdcCompact, shortPubkey } from "@/lib/format";
-import type { Vault } from "@/types/api";
+import {
+  formatDate,
+  formatNumberCompact,
+  formatUsdc,
+  formatUsdcCompact,
+  shortPubkey,
+} from "@/lib/format";
+import { vaultBalance, type Vault } from "@/types/api";
 import { Screen } from "./Screen";
 import { ActivityRow } from "../components/ActivityRow";
 import { AddressPill } from "../components/AddressPill";
 import { Card } from "../components/Card";
 import { Gauge } from "../components/Gauge";
-import { LiveBadge } from "../components/LiveBadge";
 import { Kpi, KpiStrip } from "../components/Kpi";
+import { LiveBadge } from "../components/LiveBadge";
 import { PolicyChip } from "../components/PolicyChip";
 import { Skeleton, SkeletonRows } from "../components/Skeleton";
 
@@ -71,9 +77,9 @@ export function VaultDetail() {
           )}
         </Card>
 
-        <Card title="Hourly window" meta={vaultQuery.data ? "resets at the top of the hour" : "—"}>
+        <Card title="Per-hour ceiling" meta={vaultQuery.data ? "from on-chain policy" : "—"}>
           {vaultQuery.data ? (
-            <HourlyWindow vault={vaultQuery.data} />
+            <HourlyCeiling vault={vaultQuery.data} />
           ) : (
             <Skeleton className="h-[120px] w-full" />
           )}
@@ -89,25 +95,25 @@ export function VaultDetail() {
           )}
         </Card>
 
-        <Card title="Whitelist" meta={vaultQuery.data ? `${vaultQuery.data.policy.whitelist.length} / 16` : "—"}>
-          {vaultQuery.data ? <Whitelist vault={vaultQuery.data} /> : <Skeleton className="h-[140px] w-full" />}
+        <Card title="Identifiers">
+          {vaultQuery.data ? <Identifiers vault={vaultQuery.data} /> : <Skeleton className="h-[140px] w-full" />}
         </Card>
       </div>
 
       <div className="mt-3.5">
         <Card
           title="Activity"
-          meta={activityQuery.data ? `${activityQuery.data.items.length} recent` : "—"}
+          meta={activityQuery.data ? `${activityQuery.data.length} recent` : "—"}
         >
           {activityQuery.isLoading ? (
             <SkeletonRows rows={6} height={36} />
-          ) : activityQuery.data && activityQuery.data.items.length > 0 ? (
+          ) : activityQuery.data && activityQuery.data.length > 0 ? (
             <div>
-              {activityQuery.data.items.map((event) => (
+              {activityQuery.data.map((event) => (
                 <ActivityRow
                   key={`${event.signature}:${event.log_index}`}
                   event={event}
-                  referenceSlot={activityQuery.data!.items[0]!.slot}
+                  referenceSlot={activityQuery.data![0]!.slot}
                 />
               ))}
             </div>
@@ -121,17 +127,16 @@ export function VaultDetail() {
 }
 
 function VaultKpis({ vault }: { vault: Vault }) {
-  const limit = vault.policy.lifetime_limit_usdc;
+  const limit = vault.lifetime_limit_usdc;
+  const balance = vaultBalance(vault);
   const remainingMicro = Math.max(0, limit - vault.total_spent);
-  const remainingDollars = formatUsdcCompact(remainingMicro);
-  const hourlyRemaining = Math.max(0, vault.policy.per_hour_limit_usdc - vault.hourly_used_usdc);
   return (
     <KpiStrip>
       <Kpi
         hero
         label="USDC balance"
-        value={formatUsdcCompact(vault.balance_usdc)}
-        sub={`${formatUsdc(vault.balance_usdc)} on-chain`}
+        value={formatUsdcCompact(balance)}
+        sub={`${formatUsdc(balance)} available`}
       />
       <Kpi
         label="Spent (lifetime)"
@@ -140,20 +145,20 @@ function VaultKpis({ vault }: { vault: Vault }) {
       />
       <Kpi
         label="Budget remaining"
-        value={limit > 0 ? remainingDollars : "—"}
+        value={limit > 0 ? formatUsdcCompact(remainingMicro) : "—"}
         sub={limit > 0 ? `${Math.round((1 - vault.total_spent / limit) * 100)}% headroom` : "uncapped"}
       />
       <Kpi
-        label="Hour remaining"
-        value={formatUsdcCompact(hourlyRemaining)}
-        sub={`${formatUsdc(vault.hourly_used_usdc)} used this hour`}
+        label="Deposited (lifetime)"
+        value={formatUsdcCompact(vault.total_deposited)}
+        sub={`${formatUsdc(vault.total_withdrawn)} withdrawn`}
       />
     </KpiStrip>
   );
 }
 
 function BudgetEnvelope({ vault }: { vault: Vault }) {
-  const limit = vault.policy.lifetime_limit_usdc;
+  const limit = vault.lifetime_limit_usdc;
   const fraction = limit > 0 ? vault.total_spent / limit : 0;
   const pct = Math.round(fraction * 100);
   const tone: "mint" | "warn" | "danger" = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "mint";
@@ -168,13 +173,12 @@ function BudgetEnvelope({ vault }: { vault: Vault }) {
             of {limit > 0 ? formatUsdcCompact(limit) : "∞"} spent lifetime
           </div>
         </div>
-        <div className="text-right">
-          <div className={`font-mono text-[14px] ${tone === "danger" ? "text-[#E08577]" : tone === "warn" ? "text-[#E6B86F]" : "text-mint"}`}>
-            {pct}%
-          </div>
-          {vault.last_budget_alert_pct > 0 ? (
-            <div className="font-mono text-[11px] text-muted">last alert at {vault.last_budget_alert_pct}%</div>
-          ) : null}
+        <div
+          className={`font-mono text-[14px] ${
+            tone === "danger" ? "text-[#E08577]" : tone === "warn" ? "text-[#E6B86F]" : "text-mint"
+          }`}
+        >
+          {pct}%
         </div>
       </div>
       <Gauge fraction={fraction} thresholds={[0.7, 0.8, 0.9]} tone={tone} height={10} />
@@ -189,26 +193,23 @@ function BudgetEnvelope({ vault }: { vault: Vault }) {
   );
 }
 
-function HourlyWindow({ vault }: { vault: Vault }) {
-  const limit = vault.policy.per_hour_limit_usdc;
-  const fraction = limit > 0 ? vault.hourly_used_usdc / limit : 0;
-  const pct = Math.round(fraction * 100);
-  const tone: "mint" | "warn" | "danger" = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "mint";
+function HourlyCeiling({ vault }: { vault: Vault }) {
+  const perHour = vault.hourly_limit_usdc;
   return (
     <div className="grid gap-3">
       <div>
         <div className="font-mono text-[26px] font-medium text-fg">
-          {formatUsdcCompact(vault.hourly_used_usdc)}
+          {perHour > 0 ? formatUsdcCompact(perHour) : "∞"}
         </div>
-        <div className="font-mono text-[11.5px] text-muted">
-          of {limit > 0 ? formatUsdcCompact(limit) : "∞"} per hour
-        </div>
+        <div className="font-mono text-[11.5px] text-muted">max USDC per rolling hour</div>
       </div>
-      <Gauge fraction={fraction} tone={tone} height={10} />
       <div className="font-mono text-[11px] text-muted">
-        {limit > 0
-          ? `${formatUsdcCompact(Math.max(0, limit - vault.hourly_used_usdc))} headroom before throttle`
-          : "uncapped"}
+        Per-tx cap: {formatUsdc(vault.per_tx_limit_usdc)} · Post-pay:{" "}
+        {vault.allow_post_pay ? "enabled" : "disabled"}
+      </div>
+      <div className="font-mono text-[11px] text-muted">
+        Real-time hourly usage isn't surfaced via REST yet — it lives in the on-chain `SpendPolicy`
+        account. The SDK's `getPolicy()` (Phase 4.S) will expose it.
       </div>
     </div>
   );
@@ -217,35 +218,30 @@ function HourlyWindow({ vault }: { vault: Vault }) {
 function PolicyGrid({ vault }: { vault: Vault }) {
   return (
     <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-      <PolicyChip label="Per tx" value={formatUsdc(vault.policy.per_tx_limit_usdc)} />
-      <PolicyChip
-        label="Per hour"
-        value={formatUsdc(vault.policy.per_hour_limit_usdc)}
-        sub={`${formatUsdc(vault.hourly_used_usdc)} used`}
-      />
+      <PolicyChip label="Per tx" value={formatUsdc(vault.per_tx_limit_usdc)} />
+      <PolicyChip label="Per hour" value={formatUsdc(vault.hourly_limit_usdc)} />
       <PolicyChip
         label="Lifetime"
-        value={vault.policy.lifetime_limit_usdc > 0 ? formatUsdcCompact(vault.policy.lifetime_limit_usdc) : "uncapped"}
+        value={vault.lifetime_limit_usdc > 0 ? formatUsdcCompact(vault.lifetime_limit_usdc) : "uncapped"}
       />
-      <PolicyChip
-        label="Post-pay"
-        value={vault.policy.allow_post_pay ? "Enabled" : "Disabled"}
-      />
+      <PolicyChip label="Post-pay" value={vault.allow_post_pay ? "Enabled" : "Disabled"} />
       <PolicyChip label="Frozen" value={vault.frozen ? "Yes" : "No"} />
       <PolicyChip label="Updated" value={formatDate(vault.updated_at)} />
     </div>
   );
 }
 
-function Whitelist({ vault }: { vault: Vault }) {
-  if (vault.policy.whitelist.length === 0) {
-    return <EmptyState note="No services whitelisted. Add up to 16 from the SDK." />;
-  }
+function Identifiers({ vault }: { vault: Vault }) {
   return (
     <div className="grid gap-2">
-      {vault.policy.whitelist.map((addr) => (
-        <AddressPill key={addr} address={addr} />
-      ))}
+      <AddressPill label="vault" address={vault.pubkey} />
+      <AddressPill label="agent" address={vault.agent} />
+      <AddressPill label="usdc mint" address={vault.usdc_mint} dim />
+      <AddressPill label="token acct" address={vault.vault_token_account} dim />
+      <div className="mt-3 grid grid-cols-2 gap-3 text-[12.5px]">
+        <Pair label="Created" value={`slot ${formatNumberCompact(vault.created_slot)}`} />
+        <Pair label="Last active" value={`slot ${formatNumberCompact(vault.last_active_slot)}`} />
+      </div>
     </div>
   );
 }
@@ -265,7 +261,6 @@ function HeaderBadges({ vault, live }: { vault: Vault; live: ReturnType<typeof u
           Active
         </span>
       )}
-      <AddressPill label="vault" address={vault.pubkey} />
     </div>
   );
 }
@@ -278,6 +273,15 @@ function HeroSkeleton() {
       <Skeleton className="h-[172px] w-full" />
       <Skeleton className="h-[172px] w-full" />
     </KpiStrip>
+  );
+}
+
+function Pair({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-0.5">
+      <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">{label}</span>
+      <span className="font-mono text-[12.5px] text-fg-2">{value}</span>
+    </div>
   );
 }
 

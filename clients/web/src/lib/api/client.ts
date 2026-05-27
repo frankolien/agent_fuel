@@ -9,9 +9,8 @@ import { HttpError, request } from "../http";
 import type {
   Agent,
   EventRow,
-  Page,
   ReputationLookup,
-  ScoreHistoryRow,
+  ScorePoint,
   SiwsNonceResponse,
   SiwsVerifyResponse,
   Vault,
@@ -47,11 +46,11 @@ export const api = {
     return request("/auth/nonce", { method: "POST", body: { pubkey }, anonymous: true });
   },
 
-  authVerify(pubkey: string, signature: string): Promise<SiwsVerifyResponse> {
+  authVerify(pubkey: string, nonce: string, signature: string): Promise<SiwsVerifyResponse> {
     if (config.useMocks) return delay(mockSiwsVerify());
     return request("/auth/verify", {
       method: "POST",
-      body: { pubkey, signature },
+      body: { pubkey, nonce, signature },
       anonymous: true,
     });
   },
@@ -71,7 +70,7 @@ export const api = {
     return request(`/api/agents/${pubkey}`);
   },
 
-  agentActivity(pubkey: string, query: PageQuery = {}): Promise<Page<EventRow>> {
+  agentActivity(pubkey: string, query: PageQuery = {}): Promise<EventRow[]> {
     if (config.useMocks) {
       const filtered = MOCK_EVENTS.filter((e) => e.payload["agent"] === pubkey);
       return delay(pageOf(filtered, query.limit ?? 50, query.before_slot));
@@ -79,7 +78,7 @@ export const api = {
     return request(`/api/agents/${pubkey}/activity`, { query });
   },
 
-  agentScoreHistory(pubkey: string): Promise<ScoreHistoryRow[]> {
+  agentScoreHistory(pubkey: string): Promise<ScorePoint[]> {
     if (config.useMocks) return delay(mockScoreHistory(pubkey));
     return request(`/api/agents/${pubkey}/score/history`);
   },
@@ -99,11 +98,13 @@ export const api = {
     return request(`/api/vaults/${pubkey}`);
   },
 
-  vaultActivity(pubkey: string, query: PageQuery = {}): Promise<Page<EventRow>> {
+  vaultActivity(pubkey: string, query: PageQuery = {}): Promise<EventRow[]> {
     if (config.useMocks) {
       const vaultFound = MOCK_VAULTS.find((v) => v.pubkey === pubkey);
       if (!vaultFound) notFound("vault", pubkey);
-      const filtered = MOCK_EVENTS.filter((e) => e.payload["agent"] === vaultFound.agent);
+      const filtered = MOCK_EVENTS.filter(
+        (e) => e.payload["agent"] === vaultFound.agent || e.payload["vault"] === pubkey,
+      );
       return delay(pageOf(filtered, query.limit ?? 50, query.before_slot));
     }
     return request(`/api/vaults/${pubkey}/activity`, { query });

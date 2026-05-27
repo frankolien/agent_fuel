@@ -5,9 +5,8 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import type {
   Agent,
   EventRow,
-  Page,
   ReputationLookup,
-  ScoreHistoryRow,
+  ScorePoint,
   Vault,
 } from "@/types/api";
 import { api } from "./client";
@@ -31,7 +30,7 @@ export function useAgentQuery(pubkey: string | undefined): UseQueryResult<Agent>
 export function useAgentActivityQuery(
   pubkey: string | undefined,
   before?: number,
-): UseQueryResult<Page<EventRow>> {
+): UseQueryResult<EventRow[]> {
   return useQuery({
     queryKey: pubkey ? [...queryKeys.agentActivity(pubkey), before ?? "head"] : ["agent-activity", "missing"],
     queryFn: () => api.agentActivity(pubkey!, before === undefined ? {} : { before_slot: before }),
@@ -41,7 +40,7 @@ export function useAgentActivityQuery(
 
 export function useAgentScoreHistoryQuery(
   pubkey: string | undefined,
-): UseQueryResult<ScoreHistoryRow[]> {
+): UseQueryResult<ScorePoint[]> {
   return useQuery({
     queryKey: pubkey ? queryKeys.agentScoreHistory(pubkey) : ["agent-score-history", "missing"],
     queryFn: () => api.agentScoreHistory(pubkey!),
@@ -67,7 +66,7 @@ export function useVaultQuery(pubkey: string | undefined): UseQueryResult<Vault>
 export function useVaultActivityQuery(
   pubkey: string | undefined,
   before?: number,
-): UseQueryResult<Page<EventRow>> {
+): UseQueryResult<EventRow[]> {
   return useQuery({
     queryKey: pubkey ? [...queryKeys.vaultActivity(pubkey), before ?? "head"] : ["vault-activity", "missing"],
     queryFn: () => api.vaultActivity(pubkey!, before === undefined ? {} : { before_slot: before }),

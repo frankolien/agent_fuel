@@ -1,11 +1,13 @@
 // Tiered 0-1000 reputation label. Used in agent cards + detail header.
+// Treats `score === 0` the same as null: the mirror table defaults score to 0
+// before `compute_score` ever runs, so visually they're the same "no signal".
 
 type ScoreBadgeProps = {
   score: number | null;
 };
 
 export function tierFor(score: number | null): { label: string; tone: string } {
-  if (score === null) return { label: "UNSCORED", tone: "text-muted" };
+  if (score === null || score === 0) return { label: "UNSCORED", tone: "text-muted" };
   if (score >= 900) return { label: "ELITE", tone: "text-mint" };
   if (score >= 750) return { label: "TRUSTED", tone: "text-mint-soft" };
   if (score >= 500) return { label: "STANDARD", tone: "text-fg-2" };

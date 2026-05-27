@@ -105,7 +105,9 @@ function deriveStats(agents: ReadonlyArray<Agent>): FleetStats {
   let totalFeedback = 0;
   let totalNeg = 0;
   for (const a of agents) {
-    if (a.score !== null) {
+    // Treat score=0 as "unscored": the mirror table defaults score to 0 before
+    // `compute_score` ever runs, so averaging zero would drag the fleet metric down.
+    if (a.score > 0) {
       scoreSum += a.score;
       scored += 1;
     }

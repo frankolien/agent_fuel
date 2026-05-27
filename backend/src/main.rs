@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use std::sync::Arc;
 
+use actix_cors::Cors;
 use actix_governor::GovernorConfigBuilder;
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{http::header, middleware, web, App, HttpServer};
 use agent_fuel_backend::{
     config::Config, db, notifier::LogNotifier, routes, score, state::AppState,
 };
@@ -69,6 +70,8 @@ async fn main() -> anyhow::Result<()> {
         notifier: Arc::new(LogNotifier),
     });
     let bind = cfg.bind_addr.clone();
+    let cors_origins = cfg.cors_allowed_origins.clone();
+    tracing::info!(origins = ?cors_origins, "CORS configured");
 
     // Built once so the underlying Arc<RateLimiter> is shared across all
     // worker threads — otherwise each worker has its own bucket and the
@@ -80,8 +83,20 @@ async fn main() -> anyhow::Result<()> {
         .expect("static governor config");
 
     HttpServer::new(move || {
+        // `Cors` is rebuilt per worker — it's a cheap struct of vecs, and
+        // origin matching happens on every request anyway.
+        let mut cors = Cors::default()
+            .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+            .allowed_headers(vec![header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
+            .supports_credentials()
+            .max_age(3600);
+        for origin in &cors_origins {
+            cors = cors.allowed_origin(origin);
+        }
+
         App::new()
             .app_data(state.clone())
+            .wrap(cors)
             .wrap(TracingLogger::default())
             .wrap(middleware::NormalizePath::trim())
             .configure(|cfg| routes::configure(cfg, &reputation_rate_limit))

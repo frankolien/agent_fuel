@@ -125,6 +125,7 @@ pub async fn verify_and_mint(
     pool: &PgPool,
     cfg: &AuthConfig,
     pubkey: &str,
+    nonce: &str,
     signature_b58: &str,
 ) -> Result<VerifiedToken, AuthError> {
     let Some(secret) = cfg.jwt_secret.as_deref() else {
@@ -133,23 +134,29 @@ pub async fn verify_and_mint(
     let pubkey_bytes = decode_pubkey(pubkey)?;
     let signature_bytes = decode_signature(signature_b58)?;
 
-    // Atomic claim: only succeeds if the nonce is unconsumed and unexpired.
-    // `RETURNING` gives us the issued_at + expires_at so we can rebuild the
-    // signed message without keeping it server-side between requests.
-    let row: Option<(String, DateTime<Utc>, DateTime<Utc>)> = sqlx::query_as(
+    // Atomic claim of the *specific* nonce the wallet signed. Filtering by
+    // (pubkey, nonce) is critical: a user can stack up several unconsumed
+    // nonces through aborted attempts, and we must consume the exact one
+    // whose `issued_at`/`expires_at` were baked into the signed message —
+    // otherwise the rebuilt message won't match and ed25519_verify rejects.
+    // `RETURNING` gives us those timestamps so the message round-trips
+    // without trusting the client.
+    let row: Option<(DateTime<Utc>, DateTime<Utc>)> = sqlx::query_as(
         r#"
         UPDATE auth_nonces
            SET consumed_at = now()
          WHERE pubkey = $1
+           AND nonce = $2
            AND consumed_at IS NULL
            AND expires_at > now()
-         RETURNING nonce, issued_at, expires_at
+         RETURNING issued_at, expires_at
         "#,
     )
     .bind(pubkey)
+    .bind(nonce)
     .fetch_optional(pool)
     .await?;
-    let Some((nonce, issued_at, expires_at)) = row else {
+    let Some((issued_at, expires_at)) = row else {
         return Err(AuthError::NonceInvalid);
     };
 
@@ -157,7 +164,7 @@ pub async fn verify_and_mint(
         &cfg.domain,
         &cfg.chain_id,
         pubkey,
-        &nonce,
+        nonce,
         issued_at,
         expires_at,
     );

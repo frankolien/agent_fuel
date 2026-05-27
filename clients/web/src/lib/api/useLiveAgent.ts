@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { EventRow, LiveEventFrame, Page, ScoreHistoryRow } from "@/types/api";
+import type { EventRow, LiveEventFrame, ScorePoint } from "@/types/api";
 import { subscribeAgent, type LiveStatus } from "./live";
 import { queryKeys } from "./keys";
 
@@ -13,9 +13,9 @@ type UseLiveAgent = {
 };
 
 // Opens a subscription to /ws/agents/:pk, merges frames into the cache:
-//   • prepends new events into agent + vault activity pages
+//   • prepends new events into agent + vault activity lists
 //   • appends ScoreComputed samples to the score history
-//   • invalidates the agent base query so totals refresh
+//   • invalidates the agent + reputation base queries so totals refresh
 // All cache writes use functional updaters so concurrent queries can't race.
 export function useLiveAgent(pubkey: string | undefined): UseLiveAgent {
   const qc = useQueryClient();
@@ -31,27 +31,24 @@ export function useLiveAgent(pubkey: string | undefined): UseLiveAgent {
       pubkey,
       (frame) => {
         // ---- Activity (agent view) ----
-        qc.setQueriesData<Page<EventRow>>(
+        qc.setQueriesData<EventRow[]>(
           { queryKey: queryKeys.agentActivity(pubkey) },
           (prev) => mergeEvent(prev, frame),
         );
 
-        // ---- Activity (vault view: vault rows whose `agent` matches) ----
-        // We don't know which vault pubkey the user is viewing, so invalidate
-        // any vault-activity pages — TanStack refetches lazily on access.
+        // ---- Activity (vault view: any vault whose `agent` matches) ----
+        // We don't know which vault pubkey is on screen, so invalidate any
+        // vault-activity queries — TanStack refetches lazily on access.
         qc.invalidateQueries({ queryKey: ["vaults"], type: "active", refetchType: "none" });
 
         // ---- Score history ----
         if (frame.event_name === "ScoreComputed") {
           const score = typeof frame.payload["score"] === "number" ? frame.payload["score"] : null;
           if (score !== null) {
-            qc.setQueryData<ScoreHistoryRow[]>(queryKeys.agentScoreHistory(pubkey), (prev) => {
-              const next: ScoreHistoryRow[] = [
-                ...(prev ?? []),
-                { agent: pubkey, score, slot: frame.slot, recorded_at: new Date().toISOString() },
-              ];
-              return next;
-            });
+            qc.setQueryData<ScorePoint[]>(queryKeys.agentScoreHistory(pubkey), (prev) => [
+              ...(prev ?? []),
+              { score, slot: frame.slot, recorded_at: new Date().toISOString() },
+            ]);
           }
         }
 
@@ -71,7 +68,7 @@ export function useLiveAgent(pubkey: string | undefined): UseLiveAgent {
   return { status, recent: recentRef.current };
 }
 
-function mergeEvent(prev: Page<EventRow> | undefined, frame: LiveEventFrame): Page<EventRow> {
+function mergeEvent(prev: EventRow[] | undefined, frame: LiveEventFrame): EventRow[] {
   const event: EventRow = {
     signature: frame.signature,
     log_index: frame.log_index,
@@ -79,16 +76,14 @@ function mergeEvent(prev: Page<EventRow> | undefined, frame: LiveEventFrame): Pa
     program_id: frame.program_id,
     event_name: frame.event_name,
     payload: frame.payload,
+    received_at: new Date().toISOString(),
   };
-  if (!prev) return { items: [event], next_before_slot: null };
+  if (!prev) return [event];
 
   // Skip if we already have this signature+log_index — the backend can re-push
   // an event right after a reconnect that already landed via the REST page.
-  const dup = prev.items.some((it) => it.signature === event.signature && it.log_index === event.log_index);
+  const dup = prev.some((it) => it.signature === event.signature && it.log_index === event.log_index);
   if (dup) return prev;
 
-  return {
-    items: [event, ...prev.items].slice(0, MAX_BUFFERED_ACTIVITY),
-    next_before_slot: prev.next_before_slot,
-  };
+  return [event, ...prev].slice(0, MAX_BUFFERED_ACTIVITY);
 }

@@ -1,45 +1,51 @@
-// Response shapes for the Actix-Web backend (see backend/src/routes/api/).
-// Numeric fields that are u64 on chain (lamports / micro-USDC counters) are
-// represented as `number` here — JS safe-integer limit is 2^53, which covers
-// every legitimate USDC value by orders of magnitude. If we ever need to read
-// raw lamports for SOL totals we'll swap those specific fields to `string`.
+// Response shapes for the Actix-Web backend. Mirrored 1:1 from
+// `backend/src/routes/api/*.rs` — if you change a column there, change it here.
+//
+// Numeric fields stored as u64/i64 on the server (lamports / micro-USDC counters)
+// arrive as `number` because Actix serialises them as JSON numbers. JS safe-integer
+// limit is 2^53, which covers every legitimate USDC value by orders of magnitude.
 
 export type Agent = {
   pubkey: string;
   owner: string;
-  /** null when `compute_score` has never run for this agent. */
-  score: number | null;
+  init_slot: number;
+  score: number;
   total_transactions: number;
   total_volume_usdc: number;
   services_used: number;
   consecutive_success: number;
   total_feedback_count: number;
   active_negative_feedback_count: number;
-  first_active_slot: number;
   last_active_slot: number;
   updated_at: string;
 };
 
-export type VaultPolicy = {
-  per_tx_limit_usdc: number;
-  per_hour_limit_usdc: number;
-  lifetime_limit_usdc: number;
-  allow_post_pay: boolean;
-  whitelist: string[];
-};
-
+// Flat shape matches `VaultRow` in `backend/src/routes/api/vaults.rs`. The
+// "balance" the UI cares about is derived: deposited - withdrawn - spent + claimed.
 export type Vault = {
   pubkey: string;
   owner: string;
   agent: string;
-  balance_usdc: number;
+  usdc_mint: string;
+  vault_token_account: string;
+  total_deposited: number;
+  total_withdrawn: number;
   total_spent: number;
-  hourly_used_usdc: number;
+  total_claimed: number;
   frozen: boolean;
-  last_budget_alert_pct: number;
-  policy: VaultPolicy;
+  per_tx_limit_usdc: number;
+  hourly_limit_usdc: number;
+  lifetime_limit_usdc: number;
+  allow_post_pay: boolean;
+  created_slot: number;
+  last_active_slot: number;
   updated_at: string;
 };
+
+/** Convenience: backend stores them separately; UI almost always wants both. */
+export function vaultBalance(vault: Vault): number {
+  return vault.total_deposited - vault.total_withdrawn - vault.total_spent + vault.total_claimed;
+}
 
 export type EventRow = {
   signature: string;
@@ -48,22 +54,20 @@ export type EventRow = {
   program_id: string;
   event_name: string;
   payload: Record<string, unknown>;
+  received_at: string;
 };
 
-export type ScoreHistoryRow = {
-  agent: string;
+export type ScorePoint = {
   score: number;
   slot: number;
   recorded_at: string;
 };
 
-export type Page<T> = {
-  items: T[];
-  /** Pass back as `?before_slot=` for the next page. `null` when no more rows. */
-  next_before_slot: number | null;
-};
-
+// Public reputation lookup keeps `score` nullable — distinguishes
+// "compute_score has never run" from "score is 0", per
+// `backend/src/routes/reputation.rs::ReputationResponse`.
 export type ReputationLookup = {
+  agent: string;
   score: number | null;
   total_transactions: number;
   total_volume_usdc: number;
@@ -71,7 +75,7 @@ export type ReputationLookup = {
   consecutive_success: number;
   total_feedback_count: number;
   active_negative_feedback_count: number;
-  last_active_slot: number | null;
+  last_active_slot: number;
   updated_at: string;
 };
 
@@ -87,7 +91,7 @@ export type SiwsVerifyResponse = {
   expires_at: string;
 };
 
-/** Frame shape pushed over `/ws/agents/:pk`. */
+/** Frame shape pushed over `/ws/agents/:pk`. Mirrors the WsFrame in backend ws_hub. */
 export type LiveEventFrame = {
   type: "event";
   signature: string;

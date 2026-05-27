@@ -45,7 +45,7 @@ export function useSiwsSignIn(): SignInResult {
 
     try {
       setStatus("requesting-nonce");
-      const { message } = await api.authNonce(pubkey);
+      const { message, nonce } = await api.authNonce(pubkey);
 
       setStatus("awaiting-signature");
       const encoded = new TextEncoder().encode(message);
@@ -53,7 +53,7 @@ export function useSiwsSignIn(): SignInResult {
       const signature = bs58.encode(signatureBytes);
 
       setStatus("verifying");
-      const { token } = await api.authVerify(pubkey, signature);
+      const { token } = await api.authVerify(pubkey, nonce, signature);
       authStore.setToken(token);
 
       setStatus("idle");
