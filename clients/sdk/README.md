@@ -2,7 +2,20 @@
 
 TypeScript SDK for [Agent Fuel](https://github.com/TODO/agent_fuel) — credit vault + reputation primitives for AI agents on Solana.
 
-> **Status:** `0.1.0-alpha.0`. Read methods + `spend()` + `onEvent()` live. The x402 fetch helper lands in the next slice ([phases.md](../../docs/phases.md)).
+> **Status:** `0.1.0-alpha.0`. Full read/write/stream surface live. Publishing to npm lands in the next slice ([phases.md](../../docs/phases.md)).
+
+## The six functions
+
+| Function | Returns | What it does |
+| --- | --- | --- |
+| `fuel.spend({ service, amountUsdc })` | `{ signature }` | Pays a service from the agent's vault. Local six-check policy guardrail, then a single signed transaction. Idempotently creates the service's USDC ATA if needed. |
+| `fuel.getScore(agent?)` | `ReputationLookup` | Public reputation snapshot via REST. Score is `null` for unscored agents. |
+| `fuel.getVaultBalance(ref?)` | `CreditVaultAccount` | On-chain credit vault state with a derived `balance` field. Defaults to the agent's own vault when `owner` was passed to the constructor. |
+| `fuel.getPolicy(ref?)` | `SpendPolicyAccount` | On-chain spend policy: per-tx / hourly / lifetime caps, whitelist, freeze flag. |
+| `fuel.checkService(serviceAuthority)` | `ServiceRegistryAccount` | Service registry lookup by the registering wallet's pubkey. |
+| `fuel.onEvent(callback, options?)` | `Subscription` | WebSocket stream of events for an agent. Auto-reconnect with backoff. |
+
+Plus one fetch wrapper for the x402 protocol — see [Paying with x402](#paying-with-x402) below.
 
 ## Install
 
@@ -97,6 +110,33 @@ sub.close();
 By default it subscribes to your own `agent`. Pass `{ agent }` to watch a different agent.
 
 Runtime note: the SDK prefers `globalThis.WebSocket` (browsers, Node 22+) and falls back to the `ws` package for older Node, resolved lazily so browser bundlers don't pull `ws` in.
+
+## Paying with x402
+
+`paymentRequired(fuel, options?)` returns a `fetch`-shaped function that transparently handles HTTP 402:
+
+```ts
+import { paymentRequired } from "@agent-fuel/sdk";
+
+const fetchWithPayments = paymentRequired(fuel, {
+  onPaymentRequired: (req) => console.log("paying", req.amountUsdc, "to", req.recipient),
+  onPaid: (sig) => console.log("signature:", sig),
+});
+
+const res = await fetchWithPayments("https://data.example/feed");
+const body = await res.json();
+```
+
+Flow:
+
+1. The wrapped request runs.
+2. If the response is `402`, the SDK parses the `X-Payment-Required` header (JSON; or the response body as a fallback) for `recipient` and `amountUsdc` — `payTo`/`maxAmountRequired` are accepted as aliases for x402-spec servers.
+3. `fuel.spend()` is called with those values. All six policy guardrails apply; any failure throws the matching `SpendPolicyError` and the request is *not* retried.
+4. The original request is retried once with `X-Payment: <signature>`.
+
+A second `402` propagates to the caller (no infinite loop). Malformed payment payloads throw `PaymentParseError`.
+
+There's a runnable example under [`examples/x402-quickstart/`](./examples/x402-quickstart/) with both a dry-run mode (no Solana, 5-second smoke) and a real-devnet mode.
 
 ## Program IDs
 

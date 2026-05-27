@@ -29,6 +29,12 @@ export {
   LifetimeLimitExceededError,
   NotWhitelistedError,
 } from "./errors.js";
+export { paymentRequired, PaymentParseError } from "./x402.js";
+export type {
+  FetchLike,
+  PaymentRequirement,
+  PaymentRequiredOptions,
+} from "./x402.js";
 export type {
   CreditVaultAccount,
   LiveEventFrame,

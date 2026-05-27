@@ -41,7 +41,8 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "smoke": "node scripts/smoke.mjs"
   },
   "engines": {
     "node": ">=18.18"
