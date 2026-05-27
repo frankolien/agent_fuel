@@ -1,12 +1,26 @@
 {
   "name": "@agent-fuel/sdk",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0",
   "description": "TypeScript SDK for Agent Fuel — credit vault + reputation primitives for AI agents on Solana.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TODO/agent_fuel",
+    "url": "git+https://github.com/frankolien/agent_fuel.git",
     "directory": "clients/sdk"
+  },
+  "homepage": "https://github.com/frankolien/agent_fuel/tree/main/clients/sdk#readme",
+  "bugs": "https://github.com/frankolien/agent_fuel/issues",
+  "keywords": [
+    "solana",
+    "x402",
+    "ai-agent",
+    "credit-vault",
+    "reputation",
+    "anchor"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "type": "module",
   "main": "./dist/index.cjs",
@@ -42,7 +56,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run build"
   },
   "engines": {
     "node": ">=18.18"

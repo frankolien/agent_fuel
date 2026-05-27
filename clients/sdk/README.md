@@ -140,7 +140,7 @@ There's a runnable example under [`examples/x402-quickstart/`](./examples/x402-q
 
 ## Program IDs
 
-Re-exported from the vendored IDLs (see `src/idl/`):
+Re-exported from the vendored IDLs (see [`src/idl/`](src/idl/)):
 
 ```ts
 import { PROGRAM_IDS } from "@agent-fuel/sdk";
@@ -178,3 +178,19 @@ anchor build
 npm run vendor-idl
 git add src/idl/
 ```
+
+### Releasing
+
+Releases are tag-driven. The [`SDK Release`](../../.github/workflows/sdk-release.yml) workflow publishes to npm with provenance on any `sdk-v*` tag push, and refuses to publish if the tag, `package.json` version, and `CHANGELOG.md` don't all agree.
+
+```bash
+# 1. bump version in package.json + add a `## [x.y.z]` section to CHANGELOG.md
+# 2. commit
+git commit -am "release(sdk): v0.1.1"
+# 3. tag + push
+git tag sdk-v0.1.1
+git push --follow-tags
+# 4. (after publish lands) bump the pin in clients/web/package.json
+```
+
+The workflow needs the repo secret `NPM_TOKEN` (an automation token with publish rights to the `@agent-fuel` scope). Provenance attestation is handled by GitHub OIDC — no extra config needed beyond the `id-token: write` permission already in the workflow.

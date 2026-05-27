@@ -1,0 +1,67 @@
+name: SDK Release
+
+# Tag-driven publish of @agent-fuel/sdk to npm with provenance. Push a tag of
+# the form `sdk-v0.1.0` and this workflow:
+#   1. Checks out, installs, typechecks, lints, and builds.
+#   2. Asserts the tag matches `clients/sdk/package.json` version (no surprise
+#      version drift between Git history and the registry).
+#   3. Asserts the CHANGELOG has a matching `## [<version>]` entry.
+#   4. Publishes with `--provenance --access public` using OIDC auth.
+#
+# Required repo secret: `NPM_TOKEN` (automation token with publish rights to
+# the @agent-fuel scope).
+
+on:
+  push:
+    tags:
+      - "sdk-v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    working-directory: clients/sdk
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: clients/sdk/package-lock.json
+          registry-url: "https://registry.npmjs.org"
+
+      - run: npm ci
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+
+      - name: Verify tag matches package.json version
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#sdk-v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION)" >&2
+            exit 1
+          fi
+          echo "version: $PKG_VERSION"
+
+      - name: Verify CHANGELOG has a matching entry
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if ! grep -qE "^## \[${PKG_VERSION}\]" CHANGELOG.md; then
+            echo "CHANGELOG.md is missing a '## [${PKG_VERSION}]' section" >&2
+            exit 1
+          fi
+
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
