@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 type BrandProps = {
   to?: string;
@@ -6,9 +6,16 @@ type BrandProps = {
 };
 
 export function Brand({ to = "/", size = 22 }: BrandProps) {
+  const { pathname } = useLocation();
+  const onClick = () => {
+    if (pathname === to) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
   return (
     <Link
       to={to}
+      onClick={onClick}
       className="inline-flex items-center gap-4 text-[13px] font-semibold tracking-[0.18em]"
     >
       <span>AGENT</span>

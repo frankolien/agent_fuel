@@ -72,9 +72,68 @@
   }
 }
 
+/* Anchor targets clear the sticky nav (~72px high). */
+section[id] {
+  scroll-margin-top: 88px;
+}
+
+/* Route entry animation. Fade + subtle rise; respects reduced-motion. */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes page-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-in,
+  .animate-page-in > * {
+    animation: none !important;
+  }
+}
+
 /* Composite utilities. Anything where Tailwind's arbitrary syntax would make
    the JSX unreadable — multi-stop radials, layered shadows, halos — lives here. */
 @layer utilities {
+  /* Route-level entrance: main fades up, immediate children stagger in. */
+  .animate-page-in {
+    animation: page-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-page-in > * {
+    animation: page-rise 0.95s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-page-in > *:nth-child(1) {
+    animation-delay: 0.1s;
+  }
+  .animate-page-in > *:nth-child(2) {
+    animation-delay: 0.22s;
+  }
+  .animate-page-in > *:nth-child(3) {
+    animation-delay: 0.34s;
+  }
+  .animate-page-in > *:nth-child(4) {
+    animation-delay: 0.46s;
+  }
+  .animate-page-in > *:nth-child(5) {
+    animation-delay: 0.58s;
+  }
+  .animate-page-in > *:nth-child(6) {
+    animation-delay: 0.7s;
+  }
+
   /* Page-wide ambient mint wash, fixed behind everything. */
   .bg-fx {
     position: fixed;

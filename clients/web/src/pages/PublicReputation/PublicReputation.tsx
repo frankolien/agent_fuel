@@ -10,7 +10,7 @@ export function PublicReputation() {
   const { data, isLoading, error } = useReputationQuery(agent);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-bg text-fg">
+    <main className="animate-page-in relative min-h-screen overflow-hidden bg-bg text-fg">
       <div className="bg-fx" aria-hidden="true" />
 
       <header className="relative z-10 mx-auto flex max-w-[var(--container-shell)] items-center justify-between px-[var(--pad)] py-6">

@@ -49,6 +49,7 @@ function FrameList({ frames }: { frames: ReadonlyArray<LiveEventFrame> }) {
           program_id: frame.program_id,
           event_name: frame.event_name,
           payload: frame.payload,
+          received_at: new Date().toISOString(),
         };
         return (
           <div

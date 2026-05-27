@@ -42,7 +42,7 @@ export function SignIn() {
   const busy = status === "requesting-nonce" || status === "awaiting-signature" || status === "verifying";
 
   return (
-    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-bg px-6 py-12">
+    <main className="animate-page-in relative grid min-h-screen place-items-center overflow-hidden bg-bg px-6 py-12">
       <SignInAtmosphere />
       <div className="relative z-10 w-full max-w-[440px]">
         <div className="signin-card rounded-[22px] border border-white/[0.08] bg-surface/70 p-8 backdrop-blur-xl">
