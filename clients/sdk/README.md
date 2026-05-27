@@ -2,7 +2,7 @@
 
 TypeScript SDK for [Agent Fuel](https://github.com/TODO/agent_fuel) — credit vault + reputation primitives for AI agents on Solana.
 
-> **Status:** `0.1.0-alpha.0` — scaffold only. Read methods, `spend()`, `onEvent()`, and the x402 fetch helper land in subsequent slices ([phases.md](../../docs/phases.md)).
+> **Status:** `0.1.0-alpha.0`. Read methods live. `spend()`, `onEvent()`, and the x402 fetch helper land in subsequent slices ([phases.md](../../docs/phases.md)).
 
 ## Install
 
@@ -29,6 +29,26 @@ const fuel = new AgentFuel({
 
 console.log(fuel.agentPubkey.toBase58());
 ```
+
+## Read methods
+
+```ts
+// Public reputation snapshot (REST, no auth).
+const score = await fuel.getScore(agentPubkey);
+
+// On-chain credit vault state. Vault PDA is `[b"vault", owner, agent]`,
+// so both keys are required.
+const vault = await fuel.getVaultBalance({ owner, agent });
+console.log(vault.balance, vault.frozen);
+
+// On-chain spend policy: per-tx / hourly / lifetime caps + whitelist.
+const policy = await fuel.getPolicy({ owner, agent });
+
+// Service registry lookup by the service's authority pubkey.
+const service = await fuel.checkService(serviceAuthorityPubkey);
+```
+
+All methods throw `AccountNotFoundError` when the target doesn't exist on-chain (or returns 404 from the backend), and `HttpError` for non-2xx REST responses. Field names mirror the on-chain layout in `snake_case` so they line up with the backend's REST responses.
 
 ## Program IDs
 
