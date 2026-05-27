@@ -68,7 +68,7 @@ The SDK is the only surface most developers touch. Programs hold the truth — e
 | `credit_vault` program | `EsykPsafhHUeN7jA9DGqBiGuBsTBaFynLDVVpE4jFXDg` | [view](https://explorer.solana.com/address/EsykPsafhHUeN7jA9DGqBiGuBsTBaFynLDVVpE4jFXDg?cluster=devnet) |
 | Sample vault (bootstrap) | `E8fMfr33XvT5KHn8kcoU9bw2uvJZV8JqHRHfr7rKQe2b` | [view](https://explorer.solana.com/address/E8fMfr33XvT5KHn8kcoU9bw2uvJZV8JqHRHfr7rKQe2b?cluster=devnet) |
 | Sample service registry | `3PCx6TrxQ658Bh9JVNg2JtgtPcRANVfiZsYXmNRMNhgJ` | [view](https://explorer.solana.com/address/3PCx6TrxQ658Bh9JVNg2JtgtPcRANVfiZsYXmNRMNhgJ?cluster=devnet) |
-| Live x402 spend | `5SVbj1…QCYZco` *(full hash via [`clients/sdk/scripts/devnet-bootstrap.mjs`](clients/sdk/scripts/devnet-bootstrap.mjs))* | — |
+| Live x402 spend | `3yb8QQ…1qkVe` | [view](https://explorer.solana.com/tx/3yb8QQ8PbGM8N9KAgTmNhoNirWvvgMSyqipDk87jUDdBuqD1UnRvqkZnP5zXf6SXfJZ17KPN25GFomni8391qkVe?cluster=devnet) |
 
 The vault above was created via the bootstrap script, funded with 20 test-USDC, and then *paid 1 test-USDC to a registered service through the x402 protocol* — a real end-to-end demo verifiable on chain. Re-run it yourself:
 
@@ -170,7 +170,6 @@ agent_fuel/
 │   │   ├── examples/x402-quickstart/  # Self-contained dry-run + real-devnet demo
 │   │   └── scripts/devnet-bootstrap.mjs  # End-to-end devnet provisioning
 │   └── web/                       # React + TS + Tailwind v4 dashboard (Vite)
-├── docs/                          # phases.md, data-model.md, ADRs, dev guides
 ├── tests/                         # TypeScript integration tests (Anchor)
 ├── railway.json                   # Tag-driven backend deploy
 └── .github/workflows/             # SDK CI + tag-driven npm publish with provenance
@@ -203,7 +202,7 @@ agent_fuel/
 | `reputation` program | Solana devnet | [`4GjB4xdm…tiFShvQ`](https://explorer.solana.com/address/4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ?cluster=devnet) |
 | `credit_vault` program | Solana devnet | [`EsykPsaf…E4jFXDg`](https://explorer.solana.com/address/EsykPsafhHUeN7jA9DGqBiGuBsTBaFynLDVVpE4jFXDg?cluster=devnet) |
 | `@agent-fuel/sdk` | npm | [`v0.1.0`](https://www.npmjs.com/package/@agent-fuel/sdk) |
-| Backend (REST + WS + webhook) | Railway | live (URL TBD on publish) |
+| Backend (REST + WS + webhook) | Railway | [`agentfuel-production.up.railway.app`](https://agentfuel-production.up.railway.app/health/ready) |
 | Console dashboard | local dev only | 4.W.10 (deploy) deferred |
 | Flutter mobile | not started | 4.M deferred |
 | Mainnet programs | not yet | Phase 5 |
@@ -211,8 +210,6 @@ agent_fuel/
 ---
 
 ## Phase Status
-
-Track from `docs/phases.md`:
 
 - ✅ **Phase 1** — Reputation program: seven instructions, ERC-8004 metadata, unit + slice tests
 - ✅ **Phase 2** — Credit Vault program: vault + policy + six-check spend ladder + freeze/withdraw/claim
@@ -232,7 +229,7 @@ anchor build
 cargo test --workspace
 anchor test                       # full integration suite against solana-test-validator
 
-# Backend (with Docker compose for Postgres + Redis — see docs/backend-local-dev.md)
+# Backend (needs Postgres + Redis running locally — see CONTRIBUTING.md)
 cargo run -p agent_fuel_backend
 
 # SDK
@@ -246,7 +243,7 @@ cd clients/web
 npm install && npm run dev        # http://localhost:5173
 ```
 
-Full local-dev walk: [`docs/backend-local-dev.md`](docs/backend-local-dev.md). Devnet bootstrap walk-through: [`clients/sdk/examples/x402-quickstart/README.md`](clients/sdk/examples/x402-quickstart/README.md).
+Devnet bootstrap walk-through: [`clients/sdk/examples/x402-quickstart/README.md`](clients/sdk/examples/x402-quickstart/README.md).
 
 ---
 

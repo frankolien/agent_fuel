@@ -2,7 +2,7 @@
 
 TypeScript SDK for [Agent Fuel](https://github.com/TODO/agent_fuel) — credit vault + reputation primitives for AI agents on Solana.
 
-> **Status:** `0.1.0-alpha.0`. Full read/write/stream surface live. Publishing to npm lands in the next slice ([phases.md](../../docs/phases.md)).
+> **Status:** `0.1.0`. Full read/write/stream surface live, published to npm with provenance.
 
 ## The six functions
 
