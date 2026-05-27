@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, Timelike, Utc};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use rand::RngCore;
@@ -41,6 +41,11 @@ pub struct AuthConfig {
 /// user can read it in their wallet popup; the parser on /auth/verify
 /// doesn't need it — we hand back the nonce, look it up by primary key,
 /// and re-derive the message server-side for signature verification.
+fn truncate_to_micros(dt: DateTime<Utc>) -> DateTime<Utc> {
+    let micros = dt.timestamp_subsec_micros();
+    dt.with_nanosecond(micros * 1_000).unwrap_or(dt)
+}
+
 pub fn build_message(
     domain: &str,
     chain_id: &str,
@@ -80,8 +85,12 @@ pub async fn issue_nonce(
 ) -> Result<NewNonce, AuthError> {
     validate_pubkey(pubkey)?;
     let nonce = random_nonce();
-    let issued_at = Utc::now();
-    let expires_at = issued_at + Duration::seconds(NONCE_TTL_SECONDS);
+    // Postgres TIMESTAMPTZ truncates to microsecond precision. Truncate to
+    // match BEFORE building the message so the signed string is bit-identical
+    // to the one rebuilt during verify (after a round trip through the DB).
+    // Otherwise ed25519_verify rejects on a 3-digit nanosecond mismatch.
+    let issued_at = truncate_to_micros(Utc::now());
+    let expires_at = truncate_to_micros(issued_at + Duration::seconds(NONCE_TTL_SECONDS));
 
     sqlx::query(
         "INSERT INTO auth_nonces (nonce, pubkey, issued_at, expires_at) VALUES ($1, $2, $3, $4)",
