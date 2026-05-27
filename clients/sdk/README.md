@@ -2,7 +2,7 @@
 
 TypeScript SDK for [Agent Fuel](https://github.com/TODO/agent_fuel) — credit vault + reputation primitives for AI agents on Solana.
 
-> **Status:** `0.1.0-alpha.0`. Read methods + `spend()` live. `onEvent()` and the x402 fetch helper land in subsequent slices ([phases.md](../../docs/phases.md)).
+> **Status:** `0.1.0-alpha.0`. Read methods + `spend()` + `onEvent()` live. The x402 fetch helper lands in the next slice ([phases.md](../../docs/phases.md)).
 
 ## Install
 
@@ -76,6 +76,27 @@ const { signature } = await fuel.spend({
 All six inherit from `SpendPolicyError` for a single catch-all. The same exceptions are thrown for chain-side failures too — if the on-chain `VaultError` lands between the pre-flight and the transaction (concurrent spend, window roll-over), the SDK maps the Anchor error code back to the matching typed error so your `try/catch` doesn't have to branch on where the rejection came from.
 
 The service's USDC associated token account is created on-demand — the SDK prepends an idempotent ATA-create instruction before every `spend`, so callers don't need to pre-flight whether the service has ever received USDC. The agent pays the rent (~0.002 SOL).
+
+## Live events
+
+```ts
+const sub = fuel.onEvent(
+  (frame) => {
+    // frame.event_name is one of: Spent, Claimed, ScoreComputed, Deposited, ...
+    console.log(frame.event_name, frame.payload);
+  },
+  { onStatus: (s) => console.log("ws:", s) },
+);
+
+// later
+sub.close();
+```
+
+`onEvent()` opens a WebSocket to `/ws/agents/:pk` on the configured `apiBase`, parses each JSON frame into a typed `LiveEventFrame`, and fires `callback` for every event the backend broadcasts for that agent. Connection status flows through `onStatus`: `connecting → open → reconnecting → open → … → closed`. Reconnect uses exponential backoff (1 s → 2 s → 4 s → …, capped at 30 s) and the subscription survives transient network failures until you call `sub.close()`.
+
+By default it subscribes to your own `agent`. Pass `{ agent }` to watch a different agent.
+
+Runtime note: the SDK prefers `globalThis.WebSocket` (browsers, Node 22+) and falls back to the `ws` package for older Node, resolved lazily so browser bundlers don't pull `ws` in.
 
 ## Program IDs
 

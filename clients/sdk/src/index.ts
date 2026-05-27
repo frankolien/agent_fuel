@@ -1,5 +1,12 @@
 export { AgentFuel } from "./client.js";
-export type { AgentFuelOptions, Cluster, SpendArgs, SpendResult, VaultRef } from "./client.js";
+export type {
+  AgentFuelOptions,
+  Cluster,
+  OnEventOptions,
+  SpendArgs,
+  SpendResult,
+  VaultRef,
+} from "./client.js";
 export { PROGRAM_IDS } from "./program-ids.js";
 export {
   TOKEN_PROGRAM_ID,
@@ -24,9 +31,12 @@ export {
 } from "./errors.js";
 export type {
   CreditVaultAccount,
+  LiveEventFrame,
+  LiveStatus,
   Pubkeyish,
   ReputationLookup,
   ServiceCategory,
   ServiceRegistryAccount,
   SpendPolicyAccount,
+  Subscription,
 } from "./types.js";

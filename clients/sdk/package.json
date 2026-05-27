@@ -55,11 +55,15 @@
     "@solana/web3.js": "^1.95.4",
     "@types/bn.js": "^5.2.0",
     "@types/node": "^25.9.1",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.13.0",
     "@typescript-eslint/parser": "^8.13.0",
     "eslint": "^9.14.0",
     "prettier": "^3.3.3",
     "tsup": "^8.3.5",
     "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
   }
 }

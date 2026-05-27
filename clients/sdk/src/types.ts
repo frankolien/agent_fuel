@@ -48,6 +48,26 @@ export type ServiceRegistryAccount = {
   last_active_slot: number;
 };
 
+// Wire format matches the backend's `ws_hub::broadcast_events` frame and the
+// web client's `LiveEventFrame`. The SDK forwards backend frames verbatim;
+// callers that want typed payloads can narrow on `event_name`.
+export type LiveEventFrame = {
+  type: "event";
+  signature: string;
+  log_index: number;
+  slot: number;
+  program_id: string;
+  event_name: string;
+  payload: Record<string, unknown>;
+};
+
+export type LiveStatus = "connecting" | "open" | "reconnecting" | "closed";
+
+export type Subscription = {
+  close(): void;
+  readonly status: LiveStatus;
+};
+
 export type ReputationLookup = {
   agent: string;
   score: number | null;

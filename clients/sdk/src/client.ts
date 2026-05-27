@@ -22,6 +22,7 @@ import {
   ZeroAmountError,
 } from "./errors.js";
 import { guardSpend } from "./guardrails.js";
+import { subscribe, wsUrl } from "./live.js";
 import { policyPda, serviceRegistryPda, toPubkey, vaultPda } from "./pda.js";
 import {
   buildProvider,
@@ -32,10 +33,13 @@ import {
 } from "./programs.js";
 import type {
   CreditVaultAccount,
+  LiveEventFrame,
+  LiveStatus,
   Pubkeyish,
   ReputationLookup,
   ServiceRegistryAccount,
   SpendPolicyAccount,
+  Subscription,
 } from "./types.js";
 
 export type Cluster = "mainnet-beta" | "devnet" | "testnet" | "localnet";
@@ -65,6 +69,11 @@ export type SpendArgs = {
 
 export type SpendResult = {
   signature: string;
+};
+
+export type OnEventOptions = {
+  agent?: Pubkeyish;
+  onStatus?: (status: LiveStatus) => void;
 };
 
 const DEFAULT_API_BASE = "http://localhost:8080";
@@ -185,6 +194,19 @@ export class AgentFuel {
     } catch (err) {
       throw mapSpendError(err, { service, amountUsdc, vault, policy });
     }
+  }
+
+  onEvent(
+    callback: (frame: LiveEventFrame) => void,
+    options?: OnEventOptions,
+  ): Subscription {
+    const target = options?.agent ? toPubkey(options.agent) : this.agentPubkey;
+    const url = wsUrl(this.apiBase, `/ws/agents/${target.toBase58()}`);
+    const subOpts: { onFrame: (frame: LiveEventFrame) => void; onStatus?: (status: LiveStatus) => void } = {
+      onFrame: callback,
+    };
+    if (options?.onStatus) subOpts.onStatus = options.onStatus;
+    return subscribe(url, subOpts);
   }
 }
 
