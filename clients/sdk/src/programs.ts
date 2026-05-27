@@ -1,5 +1,11 @@
 import { AnchorProvider, Program, Wallet, type Idl } from "@coral-xyz/anchor";
-import { type Connection, type Keypair, type PublicKey } from "@solana/web3.js";
+import {
+  type ConfirmOptions,
+  type Connection,
+  type Keypair,
+  type PublicKey,
+  type TransactionInstruction,
+} from "@solana/web3.js";
 import creditVaultIdl from "./idl/credit-vault.json" with { type: "json" };
 import reputationIdl from "./idl/reputation.json" with { type: "json" };
 import type BN from "bn.js";
@@ -49,10 +55,35 @@ type Fetchable<T> = {
   fetchNullable(address: PublicKey): Promise<T | null>;
 };
 
+export type SpendAccounts = {
+  agent: PublicKey;
+  vault: PublicKey;
+  policy: PublicKey;
+  vaultTokenAccount: PublicKey;
+  serviceTokenAccount: PublicKey;
+  tokenProgram: PublicKey;
+};
+
+type SpendBuilder = {
+  accounts(accounts: SpendAccounts): {
+    preInstructions(instructions: readonly TransactionInstruction[]): {
+      signers(signers: readonly Keypair[]): {
+        rpc(opts?: ConfirmOptions): Promise<string>;
+      };
+    };
+    signers(signers: readonly Keypair[]): {
+      rpc(opts?: ConfirmOptions): Promise<string>;
+    };
+  };
+};
+
 export type CreditVaultProgram = {
   account: {
     creditVault: Fetchable<RawCreditVault>;
     spendPolicy: Fetchable<RawSpendPolicy>;
+  };
+  methods: {
+    spend(amountUsdc: BN): SpendBuilder;
   };
 };
 
