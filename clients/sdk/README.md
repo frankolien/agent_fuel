@@ -167,6 +167,19 @@ npm run lint
 npm run build        # emits dist/ (ESM + CJS + .d.ts) via tsup
 ```
 
+### Bootstrapping a devnet sandbox
+
+`npm run devnet:bootstrap` provisions a complete devnet environment in one command: deploys a test USDC mint, mints initial supply to the owner, registers a service, initializes an agent profile, creates + funds a vault, and verifies the whole graph by reading it back through the SDK.
+
+```bash
+npm run build           # bootstrap imports from dist/
+npm run devnet:bootstrap
+```
+
+Defaults to the Solana CLI keypair at `~/.config/solana/id.json` as the owner-agent identity (needs ~0.05 SOL on devnet — `solana airdrop 1 --url devnet` if low). Generates the service + mint keypairs under `~/.config/agent-fuel/`, idempotently — reruns after a partial failure are safe.
+
+The script writes a `devnet-config.json` manifest with every pubkey + path, and prints the exact env-var block to copy into the [x402-quickstart](./examples/x402-quickstart/) example for a real end-to-end `spend()` against devnet.
+
 ### Refreshing the IDLs
 
 The IDLs under `src/idl/` are committed copies — the SDK build, CI, and downstream consumers never depend on `anchor build`. When the Anchor programs change, re-vendor manually and commit:

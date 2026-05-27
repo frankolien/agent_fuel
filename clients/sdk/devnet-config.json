@@ -1,0 +1,23 @@
+{
+  "cluster": "devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "ownerAgent": {
+    "pubkey": "AxMZj6QHB4Zxe7wpUCidh1cS7ueN2MGsiWLKCMokTA64",
+    "keypairPath": "/Users/hi/.config/solana/id.json"
+  },
+  "service": {
+    "pubkey": "3PCx6TrxQ658Bh9JVNg2JtgtPcRANVfiZsYXmNRMNhgJ",
+    "keypairPath": "/Users/hi/.config/agent-fuel/service.json"
+  },
+  "mint": "GxAHHLN4qZtiHXKiTNFebXbbMWzgFBy4AGaiDJEY8xdf",
+  "vault": "E8fMfr33XvT5KHn8kcoU9bw2uvJZV8JqHRHfr7rKQe2b",
+  "policy": "G24KjoCzzT4bHfZEJ5EB5KaGq3tZTFqkR4cRpZByTqx4",
+  "vaultTokenAccount": "Cvm84iey8wPRAnJJTudZWSQqBm4uwTvMFupf4CGPV1wo",
+  "serviceRegistry": "FQ6XeSeYMJhYWyJzkJCripVJFfyCixUkBmKGP7tJhadN",
+  "policyCaps": {
+    "perTxUsdc": 1000000,
+    "hourlyUsdc": 5000000,
+    "lifetimeUsdc": 100000000
+  },
+  "balanceUsdc": 19000000
+}

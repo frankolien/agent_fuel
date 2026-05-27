@@ -49,27 +49,26 @@ Tear down with `kill %1` (or `kill $(lsof -ti:7402)`).
 
 ## Run it (devnet)
 
-Talks to the real Agent Fuel `credit_vault` program on devnet. You need:
-
-1. **A funded Agent Fuel vault** — owner has registered an agent + created a vault + deposited devnet USDC. See the SDK README and program docs.
-2. **A registered service** to receive the payment. Its authority pubkey is what the server returns in `X-Payment-Required.recipient`.
-3. **The agent keypair JSON** (Solana CLI format: a JSON array of 64 bytes).
-4. **`@agent-fuel/sdk` linked to your local checkout** — `npm link` from `clients/sdk/` then `npm link @agent-fuel/sdk` here, or just leave the relative `../../dist/index.js` import in `client.mjs`.
-
-Then:
+Talks to the real Agent Fuel `credit_vault` program on devnet. The SDK's bootstrap script handles all the on-chain prerequisites — a test USDC mint, a registered service, an initialized agent profile, and a funded vault — in one idempotent command:
 
 ```bash
-# in one shell — point the server at your real service authority
-export X402_RECIPIENT=<service_authority_pubkey>
-export X402_AMOUNT_USDC=50000           # 0.05 USDC
+# from clients/sdk/
+npm run devnet:bootstrap
+```
+
+That prints the exact env-var block to use here. Then:
+
+```bash
+# in one shell
+export X402_RECIPIENT=<service pubkey from the manifest>
+export X402_AMOUNT_USDC=1000000            # 1 test-USDC, well under the vault's per-tx cap
 node server.mjs
 
-# in another shell
+# in another shell — values come straight from the bootstrap output
 export X402_REAL=1
-export AGENT_KEYPAIR_PATH=~/.config/solana/agent.json
-export VAULT_OWNER=<owner_pubkey>
-export SOLANA_RPC=https://api.devnet.solana.com   # optional
-export AGENT_FUEL_API=http://localhost:8080       # optional, defaults to localhost
+export AGENT_KEYPAIR_PATH=~/.config/solana/id.json
+export VAULT_OWNER=<owner pubkey from the manifest>
+export SOLANA_RPC=https://api.devnet.solana.com
 node client.mjs
 ```
 

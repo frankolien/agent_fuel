@@ -78,7 +78,7 @@ Phase 4 splits into three tracks that can move in parallel once their first slic
 7. **Vaults UI.** Vaults list + vault detail with policy panel + activity. Reads `/api/vaults`, `/api/vaults/:pk`, `/api/vaults/:pk/activity`.
 8. **Live stream.** WS subscription per detail page (`/ws/agents/:pk`), merge into TanStack Query cache; connection-state badge.
 9. **Public reputation.** Unauthenticated `/reputation/:agent` page that any service can deep-link to (no wallet required).
-10. **Deploy.** Vercel project, env wiring (`VITE_API_BASE`), preview URLs on PRs, README + CHANGELOG entries, dashboard URL in the top-level README.
+10. ~~**Deploy.** Vercel project, env wiring (`VITE_API_BASE`), preview URLs on PRs, README + CHANGELOG entries, dashboard URL in the top-level README.~~ **Deferred** — frontend deploy depends on a hosted backend with TLS + persistent DB; revisit once backend deploy is planned.
 
 ### Slices — SDK (4.S)
 

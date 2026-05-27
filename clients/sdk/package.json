@@ -57,6 +57,7 @@
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "smoke": "node scripts/smoke.mjs",
+    "devnet:bootstrap": "node scripts/devnet-bootstrap.mjs",
     "prepublishOnly": "npm run typecheck && npm run lint && npm run build"
   },
   "engines": {
@@ -68,6 +69,7 @@
   },
   "devDependencies": {
     "@coral-xyz/anchor": "^0.31.0",
+    "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.95.4",
     "@types/bn.js": "^5.2.0",
     "@types/node": "^25.9.1",
