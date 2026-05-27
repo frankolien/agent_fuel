@@ -54,10 +54,19 @@ import creditVaultIdl from "@agent-fuel/sdk/idl/credit-vault";
 
 ```bash
 npm install
-npm run vendor-idl   # copies target/idl/*.json into src/idl/
 npm run typecheck
 npm run lint
 npm run build        # emits dist/ (ESM + CJS + .d.ts) via tsup
 ```
 
-`vendor-idl` requires the workspace's `target/idl/` to be populated — run `anchor build` at the repo root first if the IDLs are missing.
+### Refreshing the IDLs
+
+The IDLs under `src/idl/` are committed copies — the SDK build, CI, and downstream consumers never depend on `anchor build`. When the Anchor programs change, re-vendor manually and commit:
+
+```bash
+# at repo root
+anchor build
+# in clients/sdk/
+npm run vendor-idl
+git add src/idl/
+```
