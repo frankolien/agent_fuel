@@ -202,7 +202,7 @@ agent_fuel/
 | `reputation` program | Solana devnet | [`4GjB4xdm…tiFShvQ`](https://explorer.solana.com/address/4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ?cluster=devnet) |
 | `credit_vault` program | Solana devnet | [`EsykPsaf…E4jFXDg`](https://explorer.solana.com/address/EsykPsafhHUeN7jA9DGqBiGuBsTBaFynLDVVpE4jFXDg?cluster=devnet) |
 | `@agent-fuel/sdk` | npm | [`v0.1.0`](https://www.npmjs.com/package/@agent-fuel/sdk) |
-| Backend (REST + WS + webhook) | Railway | [`agentfuel-production.up.railway.app`](https://agentfuel-production.up.railway.app/health/ready) |
+| Backend (REST + WS + webhook) | Railway | [`api.agentfuel.online`](https://api.agentfuel.online/health/ready) |
 | Console dashboard | local dev only | 4.W.10 (deploy) deferred |
 | Flutter mobile | not started | 4.M deferred |
 | Mainnet programs | not yet | Phase 5 |

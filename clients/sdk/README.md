@@ -38,7 +38,7 @@ const fuel = new AgentFuel({
   owner: new PublicKey("..."),      // the wallet that funded your vault
   cluster: "devnet",
   rpc: "https://api.devnet.solana.com",
-  apiBase: "http://localhost:8080", // your Agent Fuel backend
+  apiBase: "https://api.agentfuel.online", // your Agent Fuel backend
 });
 ```
 
