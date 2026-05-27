@@ -15,9 +15,10 @@
   "vaultTokenAccount": "Cvm84iey8wPRAnJJTudZWSQqBm4uwTvMFupf4CGPV1wo",
   "serviceRegistry": "FQ6XeSeYMJhYWyJzkJCripVJFfyCixUkBmKGP7tJhadN",
   "policyCaps": {
-    "perTxUsdc": 1000000,
-    "hourlyUsdc": 5000000,
-    "lifetimeUsdc": 100000000
+    "perTxUsdc": 10000000,
+    "hourlyUsdc": 50000000,
+    "lifetimeUsdc": 1000000000
   },
-  "balanceUsdc": 19000000
+  "balanceUsdc": 68950000
 }
+ 

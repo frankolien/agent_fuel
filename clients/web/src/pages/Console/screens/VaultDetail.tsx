@@ -1,6 +1,12 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
+import { useQueryClient } from "@tanstack/react-query";
 import { useVaultActivityQuery, useVaultQuery } from "@/lib/api/hooks";
+import { queryKeys } from "@/lib/api/keys";
 import { useLiveAgent } from "@/lib/api/useLiveAgent";
+import { deposit, setFrozen, updatePolicy } from "@/lib/owner-actions";
 import {
   formatDate,
   formatNumberCompact,
@@ -25,7 +31,10 @@ export function VaultDetail() {
   const activityQuery = useVaultActivityQuery(pubkey);
   const live = useLiveAgent(vaultQuery.data?.agent);
 
-  if (vaultQuery.error) {
+  // Only show the not-found panel when we've truly never resolved the vault.
+  // If we have cached data and the refetch later errors, prefer the stale data
+  // (TanStack keeps it for 5 min) over wiping the UI.
+  if (vaultQuery.error && !vaultQuery.data) {
     return (
       <Screen title="Vault not found" subtitle="That pubkey isn't in your treasury.">
         <Link to="/console/vaults" className="text-mint hover:text-fg">
@@ -87,7 +96,7 @@ export function VaultDetail() {
       </div>
 
       <div className="mt-3.5 grid grid-cols-1 gap-3.5 lg:grid-cols-[1.4fr_1fr]">
-        <Card title="Policy">
+        <Card title="Policy" tools={vaultQuery.data ? <OwnerActions vault={vaultQuery.data} /> : null}>
           {vaultQuery.data ? (
             <PolicyGrid vault={vaultQuery.data} />
           ) : (
@@ -289,6 +298,391 @@ function EmptyState({ note }: { note: string }) {
   return (
     <div className="rounded-md border border-dashed border-white/[0.09] bg-surface/40 px-4 py-8 text-center text-[12.5px] text-muted">
       {note}
+    </div>
+  );
+}
+
+// ---------- Owner actions ----------
+
+function OwnerActions({ vault }: { vault: Vault }) {
+  const { publicKey, signTransaction } = useWallet();
+  const { connection } = useConnection();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState<null | "deposit" | "policy">(null);
+  const [freezing, setFreezing] = useState(false);
+  const [freezeError, setFreezeError] = useState<string | null>(null);
+
+  const isOwner = publicKey?.toBase58() === vault.owner;
+
+  const onToggleFreeze = async () => {
+    if (!publicKey || !signTransaction) return;
+    setFreezeError(null);
+    setFreezing(true);
+    try {
+      await setFrozen({
+        connection,
+        wallet: { publicKey, signTransaction },
+        owner: new PublicKey(vault.owner),
+        agent: new PublicKey(vault.agent),
+        frozen: !vault.frozen,
+      });
+      await qc.invalidateQueries({ queryKey: queryKeys.vault(vault.pubkey) });
+    } catch (err) {
+      setFreezeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFreezing(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen("deposit")}
+          disabled={!isOwner}
+          className="rounded-full border border-[var(--color-line-2)] px-3 py-1 font-mono text-[11px] text-fg-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+          title={isOwner ? "Deposit USDC into this vault" : "Connect the owner wallet to manage"}
+        >
+          Deposit
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen("policy")}
+          disabled={!isOwner}
+          className="rounded-full border border-[var(--color-line-2)] px-3 py-1 font-mono text-[11px] text-fg-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+          title={isOwner ? "Raise or lower the spend caps" : "Connect the owner wallet to manage"}
+        >
+          Edit policy
+        </button>
+        <button
+          type="button"
+          onClick={onToggleFreeze}
+          disabled={!isOwner || freezing}
+          className={`rounded-full border px-3 py-1 font-mono text-[11px] transition disabled:cursor-not-allowed disabled:opacity-40 ${
+            vault.frozen
+              ? "border-mint/40 bg-mint/10 text-mint hover:bg-mint/15"
+              : "border-[#E0857740] bg-[#E0857714] text-[#E08577] hover:bg-[#E0857720]"
+          }`}
+          title={
+            isOwner
+              ? vault.frozen
+                ? "Unfreeze the vault — spends resume"
+                : "Freeze the vault — every spend reverts until unfrozen"
+              : "Connect the owner wallet to manage"
+          }
+        >
+          {freezing ? "…" : vault.frozen ? "Unfreeze" : "Freeze"}
+        </button>
+      </div>
+      {freezeError && (
+        <div className="mt-2 rounded-md border border-[#E0857733] bg-[#E0857714] px-3 py-1.5 font-mono text-[11px] text-[#E08577]">
+          {freezeError}
+        </div>
+      )}
+
+      {open === "deposit" && (
+        <DepositModal vault={vault} onClose={() => setOpen(null)} />
+      )}
+      {open === "policy" && (
+        <EditPolicyModal vault={vault} onClose={() => setOpen(null)} />
+      )}
+    </>
+  );
+}
+
+function DepositModal({ vault, onClose }: { vault: Vault; onClose: () => void }) {
+  const { connection } = useConnection();
+  const wallet = useWallet();
+  const qc = useQueryClient();
+  const [amount, setAmount] = useState("1");
+  const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wallet.publicKey || !wallet.signTransaction) {
+      setError("Wallet not connected");
+      return;
+    }
+    const usdc = Number(amount);
+    if (!Number.isFinite(usdc) || usdc <= 0) {
+      setError("Amount must be a positive number");
+      return;
+    }
+    setError(null);
+    setStatus("submitting");
+    try {
+      const sig = await deposit({
+        connection,
+        wallet: {
+          publicKey: wallet.publicKey,
+          signTransaction: wallet.signTransaction,
+        },
+        owner: new PublicKey(vault.owner),
+        agent: new PublicKey(vault.agent),
+        mint: new PublicKey(vault.usdc_mint),
+        amountUsdcMicro: Math.round(usdc * 1_000_000),
+      });
+      setSignature(sig);
+      setStatus("done");
+      await qc.invalidateQueries({ queryKey: queryKeys.vault(vault.pubkey) });
+      await qc.invalidateQueries({ queryKey: queryKeys.vaultActivity(vault.pubkey) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("idle");
+    }
+  };
+
+  return (
+    <Modal title="Deposit USDC" onClose={onClose}>
+      {status === "done" ? (
+        <DoneState
+          signature={signature ?? ""}
+          message={`Deposited ${amount} test-USDC into the vault.`}
+          onClose={onClose}
+        />
+      ) : (
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <Field label="Amount (test-USDC)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              autoFocus
+              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
+            />
+          </Field>
+          <p className="m-0 text-[12px] text-muted">
+            Transfers from your wallet's USDC ATA to the vault's token account. Owner-signed.
+          </p>
+          {error && <ErrorLine text={error} />}
+          <ModalFooter
+            submitLabel={status === "submitting" ? "Submitting…" : "Deposit"}
+            submitting={status === "submitting"}
+            onClose={onClose}
+          />
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+function EditPolicyModal({ vault, onClose }: { vault: Vault; onClose: () => void }) {
+  const { connection } = useConnection();
+  const wallet = useWallet();
+  const qc = useQueryClient();
+  const [perTx, setPerTx] = useState(String(vault.per_tx_limit_usdc / 1_000_000));
+  const [hourly, setHourly] = useState(String(vault.hourly_limit_usdc / 1_000_000));
+  const [lifetime, setLifetime] = useState(String(vault.lifetime_limit_usdc / 1_000_000));
+  const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wallet.publicKey || !wallet.signTransaction) {
+      setError("Wallet not connected");
+      return;
+    }
+    const parse = (s: string) => {
+      const n = Number(s);
+      if (!Number.isFinite(n) || n < 0) throw new Error(`Invalid value: ${s}`);
+      return Math.round(n * 1_000_000);
+    };
+    setError(null);
+    setStatus("submitting");
+    try {
+      const sig = await updatePolicy({
+        connection,
+        wallet: {
+          publicKey: wallet.publicKey,
+          signTransaction: wallet.signTransaction,
+        },
+        owner: new PublicKey(vault.owner),
+        agent: new PublicKey(vault.agent),
+        perTxUsdcMicro: parse(perTx),
+        hourlyUsdcMicro: parse(hourly),
+        lifetimeUsdcMicro: parse(lifetime),
+      });
+      setSignature(sig);
+      setStatus("done");
+      await qc.invalidateQueries({ queryKey: queryKeys.vault(vault.pubkey) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("idle");
+    }
+  };
+
+  return (
+    <Modal title="Edit policy" onClose={onClose}>
+      {status === "done" ? (
+        <DoneState
+          signature={signature ?? ""}
+          message="Policy caps updated on chain."
+          onClose={onClose}
+        />
+      ) : (
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <Field label="Per-tx cap (USDC)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={perTx}
+              onChange={(e) => setPerTx(e.target.value)}
+              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
+            />
+          </Field>
+          <Field label="Hourly cap (USDC)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={hourly}
+              onChange={(e) => setHourly(e.target.value)}
+              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
+            />
+          </Field>
+          <Field label="Lifetime cap (USDC)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={lifetime}
+              onChange={(e) => setLifetime(e.target.value)}
+              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
+            />
+          </Field>
+          <p className="m-0 text-[12px] text-muted">
+            Whitelist + post-pay are preserved. The rolling-hour counter doesn't reset on update —
+            spent USDC in the last ~60 min still counts toward the new cap.
+          </p>
+          {error && <ErrorLine text={error} />}
+          <ModalFooter
+            submitLabel={status === "submitting" ? "Submitting…" : "Update policy"}
+            submitting={status === "submitting"}
+            onClose={onClose}
+          />
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[440px] rounded-[16px] border border-[var(--color-line-2)] bg-surface p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="m-0 text-[16px] font-semibold tracking-[-0.005em]">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-muted hover:text-fg"
+          >
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function ModalFooter({
+  submitLabel,
+  submitting,
+  onClose,
+}: {
+  submitLabel: string;
+  submitting: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="mt-2 flex items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={onClose}
+        className="rounded-full border border-[var(--color-line)] px-4 py-2 text-[12.5px] text-fg-2 hover:bg-surface-2"
+      >
+        Cancel
+      </button>
+      <button
+        type="submit"
+        disabled={submitting}
+        className="rounded-full bg-mint px-4 py-2 text-[12.5px] font-semibold text-bg hover:bg-mint-soft disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {submitLabel}
+      </button>
+    </div>
+  );
+}
+
+function ErrorLine({ text }: { text: string }) {
+  return (
+    <div className="rounded-md border border-[#E0857733] bg-[#E0857714] px-3 py-2 text-[12px] text-[#E08577]">
+      {text}
+    </div>
+  );
+}
+
+function DoneState({
+  signature,
+  message,
+  onClose,
+}: {
+  signature: string;
+  message: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <p className="m-0 text-[14px] text-fg-2">{message}</p>
+      <a
+        href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block truncate font-mono text-[11.5px] text-mint hover:underline"
+      >
+        {signature}
+      </a>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full bg-mint px-4 py-2 text-[12.5px] font-semibold text-bg hover:bg-mint-soft"
+        >
+          Done
+        </button>
+      </div>
     </div>
   );
 }

@@ -58,6 +58,8 @@
     "format": "prettier --write .",
     "smoke": "node scripts/smoke.mjs",
     "devnet:bootstrap": "node scripts/devnet-bootstrap.mjs",
+    "devnet:topup": "node scripts/topup.mjs",
+    "devnet:update-policy": "node scripts/update-policy.mjs",
     "prepublishOnly": "npm run typecheck && npm run lint && npm run build"
   },
   "engines": {
