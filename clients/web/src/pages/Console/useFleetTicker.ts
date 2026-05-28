@@ -12,7 +12,10 @@ export function useFleetTicker(): ReadonlyArray<LiveEventFrame> {
   const [items, setItems] = useState<LiveEventFrame[]>([]);
 
   useEffect(() => {
-    if (!agents || agents.length === 0) return;
+    // Guard against a non-array slipping through the query layer (cached
+    // payload from an older shape, a 204 coerced to null, etc.) — without this
+    // the .map below crashes the whole console.
+    if (!Array.isArray(agents) || agents.length === 0) return;
 
     const subs = agents.map((agent) =>
       subscribeAgent(agent.pubkey, (frame) => {

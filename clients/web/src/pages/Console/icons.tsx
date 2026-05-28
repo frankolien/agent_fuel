@@ -101,6 +101,14 @@ export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function MenuIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} width={16} height={16} viewBox="0 0 16 16" {...props}>
+      <path d="M2 4 H14 M2 8 H14 M2 12 H14" />
+    </svg>
+  );
+}
+
 export function CaretDownIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} width={10} height={10} viewBox="0 0 10 10" strokeWidth={1.3} {...props}>

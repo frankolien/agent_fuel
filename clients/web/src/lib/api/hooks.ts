@@ -32,14 +32,18 @@ export function useAgentsQuery(): UseQueryResult<Agent[]> {
     // Scope by wallet so the cache resets when the user switches owners.
     queryKey: walletPubkey ? [...queryKeys.agents(), walletPubkey] : queryKeys.agents(),
     queryFn: async () => {
-      const fromBackend = await api.listAgents();
+      // Backend may return null / non-array on empty or transient errors —
+      // coerce so every consumer can safely .map/.length without guards.
+      const fromBackend = toArray<Agent>(await api.listAgents());
       if (!walletPubkey) return fromBackend;
       // If the backend already has indexed agents, prefer that (it has the
       // computed reputation + indexed activity hooks). Otherwise scan the
       // chain for AgentProfile accounts owned by the connected wallet.
       if (fromBackend.length > 0) return fromBackend;
       try {
-        return await readAgentsFromChainByOwner(connection, new PublicKey(walletPubkey));
+        return toArray<Agent>(
+          await readAgentsFromChainByOwner(connection, new PublicKey(walletPubkey)),
+        );
       } catch (err) {
         console.warn("agents chain fallback failed", err);
         return fromBackend; // empty
@@ -47,6 +51,13 @@ export function useAgentsQuery(): UseQueryResult<Agent[]> {
     },
     placeholderData: (prev) => prev,
   });
+}
+
+// React Query types its data as `T` but we sometimes get `null` from a 204 or
+// a shape mismatch from an older backend. Centralising this here means screens
+// don't need to repeat `Array.isArray` checks before every map.
+function toArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
 }
 
 export function useAgentQuery(pubkey: string | undefined): UseQueryResult<Agent> {
@@ -90,7 +101,9 @@ export function useAgentVaultsQuery(
     queryFn: async () => {
       // No backend endpoint yet for "vaults by agent" — read chain directly.
       // Cheap (1 getProgramAccounts + N fetches; users rarely have many vaults).
-      return readVaultsFromChainByAgent(connection, new PublicKey(pubkey!));
+      return toArray<Vault>(
+        await readVaultsFromChainByAgent(connection, new PublicKey(pubkey!)),
+      );
     },
     enabled: !!pubkey,
     placeholderData: (prev) => prev,
@@ -114,7 +127,7 @@ export function useVaultsQuery(): UseQueryResult<Vault[]> {
     // Scope by wallet so switching owners doesn't show a stale list.
     queryKey: walletPubkey ? [...queryKeys.vaults(), walletPubkey] : queryKeys.vaults(),
     queryFn: async () => {
-      const fromBackend = await api.listVaults();
+      const fromBackend = toArray<Vault>(await api.listVaults());
       // If the indexer already knows vaults for this user, use that — it has
       // history + activity hooks the chain doesn't. If the list is empty (or
       // missing this user's vaults entirely), fall back to scanning the chain
@@ -123,7 +136,9 @@ export function useVaultsQuery(): UseQueryResult<Vault[]> {
       if (!walletPubkey) return fromBackend;
       if (fromBackend.length > 0) return fromBackend;
       try {
-        return await readVaultsFromChainByOwner(connection, new PublicKey(walletPubkey));
+        return toArray<Vault>(
+          await readVaultsFromChainByOwner(connection, new PublicKey(walletPubkey)),
+        );
       } catch (err) {
         console.warn("vaults chain fallback failed", err);
         return fromBackend; // empty
@@ -188,12 +203,12 @@ export function useServicesQuery(): UseQueryResult<Service[]> {
       // returns empty, so a slow Helius webhook doesn't hide a just-registered
       // service. Chain is source of truth; backend is the cheap read view.
       try {
-        const rows = await api.listServices();
+        const rows = toArray<unknown>(await api.listServices());
         if (rows.length > 0) return rows.map(normalizeBackendService);
       } catch (err) {
         console.warn("backend services list failed; falling back to chain", err);
       }
-      return readServicesFromChain(connection);
+      return toArray<Service>(await readServicesFromChain(connection));
     },
     placeholderData: (prev) => prev,
   });

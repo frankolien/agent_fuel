@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useAuth } from "@/app/auth";
 import { formatSol, formatUsdc, useWalletBalances } from "@/lib/useWalletBalances";
-import { CaretDownIcon, InboxIcon, SearchIcon, SettingsIcon } from "./icons";
+import { CaretDownIcon, InboxIcon, MenuIcon, SearchIcon, SettingsIcon } from "./icons";
 import { Ticker } from "./components/Ticker";
 import { useFleetTicker } from "./useFleetTicker";
 
@@ -11,28 +11,48 @@ import { useFleetTicker } from "./useFleetTicker";
 // when they haven't opened any vault yet.
 const DEFAULT_DEVNET_USDC_MINT = "GxAHHLN4qZtiHXKiTNFebXbbMWzgFBy4AGaiDJEY8xdf";
 
-export function Topbar() {
+type Props = {
+  onMenuClick?: () => void;
+};
+
+export function Topbar({ onMenuClick }: Props) {
   const ticker = useFleetTicker();
   return (
-    <header className="sticky top-0 z-10 grid grid-cols-[380px_1fr_auto] items-center gap-4 border-b border-white/[0.09] bg-[#0e0f11] px-[22px]">
-      <label className="flex h-8 items-center gap-2 rounded-md border border-white/[0.09] bg-surface-2 px-2.5 text-muted">
+    // Mobile: hamburger + wallet only. md+: add search. xl+: add ticker.
+    // The grid collapses to a simple flex layout under md so nothing overflows
+    // the sidebar-less viewport.
+    <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.09] bg-[#0e0f11] px-3 sm:px-5 md:grid md:grid-cols-[1fr_auto] md:gap-4 md:px-[22px] xl:grid-cols-[380px_1fr_auto]">
+      <button
+        type="button"
+        onClick={onMenuClick}
+        title="Open menu"
+        aria-label="Open navigation menu"
+        className="grid h-8 w-8 place-items-center rounded-md border border-white/[0.09] bg-surface-2 text-fg-2 hover:text-fg md:hidden"
+      >
+        <MenuIcon />
+      </button>
+
+      <label className="hidden h-8 items-center gap-2 rounded-md border border-white/[0.09] bg-surface-2 px-2.5 text-muted md:flex">
         <SearchIcon />
         <input
-          className="flex-1 border-0 bg-transparent text-[12.5px] text-fg outline-none placeholder:text-muted"
+          className="w-full min-w-0 flex-1 border-0 bg-transparent text-[12.5px] text-fg outline-none placeholder:text-muted"
           placeholder="Search agents, services, signatures, PDAs…"
         />
-        <span className="rounded-sm border border-white/[0.16] bg-surface-3 px-1.5 py-px font-mono text-[10px] text-muted">
+        <span className="hidden rounded-sm border border-white/[0.16] bg-surface-3 px-1.5 py-px font-mono text-[10px] text-muted lg:inline">
           ⌘K
         </span>
       </label>
 
-      <Ticker items={ticker} />
+      {/* Ticker is information-dense; below xl it overflows the topbar. */}
+      <div className="hidden min-w-0 xl:block">
+        <Ticker items={ticker} />
+      </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="ml-auto flex items-center gap-1.5">
         <button
           type="button"
           title="Inbox"
-          className="relative grid h-8 w-8 place-items-center rounded-md border border-transparent text-fg-2 hover:border-white/[0.09] hover:bg-surface-2 hover:text-fg"
+          className="relative hidden h-8 w-8 place-items-center rounded-md border border-transparent text-fg-2 hover:border-white/[0.09] hover:bg-surface-2 hover:text-fg sm:grid"
         >
           <InboxIcon />
           <span className="absolute top-1 right-1 grid h-[13px] min-w-[13px] place-items-center rounded-full bg-mint px-0.5 text-[9px] font-semibold text-[#0a0b0c]">
@@ -42,7 +62,7 @@ export function Topbar() {
         <button
           type="button"
           title="Settings"
-          className="grid h-8 w-8 place-items-center rounded-md border border-transparent text-fg-2 hover:border-white/[0.09] hover:bg-surface-2 hover:text-fg"
+          className="hidden h-8 w-8 place-items-center rounded-md border border-transparent text-fg-2 hover:border-white/[0.09] hover:bg-surface-2 hover:text-fg sm:grid"
         >
           <SettingsIcon />
         </button>
@@ -57,7 +77,7 @@ function BalancesPill() {
   const { data, isLoading } = useWalletBalances(DEFAULT_DEVNET_USDC_MINT);
   if (isLoading && !data) {
     return (
-      <div className="flex h-8 items-center rounded-md border border-white/[0.09] bg-surface-2 px-2.5 font-mono text-[11px] text-muted">
+      <div className="hidden h-8 items-center rounded-md border border-white/[0.09] bg-surface-2 px-2.5 font-mono text-[11px] text-muted sm:flex">
         …
       </div>
     );
@@ -66,7 +86,7 @@ function BalancesPill() {
   return (
     <div
       title="Your wallet's devnet balances"
-      className="flex h-8 items-center gap-2 rounded-md border border-white/[0.09] bg-surface-2 px-2.5 font-mono text-[11px]"
+      className="hidden h-8 items-center gap-2 rounded-md border border-white/[0.09] bg-surface-2 px-2.5 font-mono text-[11px] sm:flex"
     >
       <span className="text-mint">{formatUsdc(data.usdcMicro)} USDC</span>
       <span className="text-muted-2">·</span>
