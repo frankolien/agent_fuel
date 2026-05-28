@@ -1,0 +1,27 @@
+{
+  "name": "@agent-fuel/example-service-recorder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Worked example: a service-side daemon that subscribes to its own Spent events and attests each payment on chain via record_payment. Pairs with the pulse-agent example.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agent-fuel/sdk": "file:../../clients/sdk",
+    "@solana/web3.js": "^1.95.0",
+    "bs58": "^6.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}

@@ -15,7 +15,14 @@ export {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountIdempotentInstruction,
 } from "./constants.js";
-export { vaultPda, policyPda, serviceRegistryPda } from "./pda.js";
+export {
+  agentProfilePda,
+  agentServiceLinkPda,
+  policyPda,
+  receiptUsedPda,
+  serviceRegistryPda,
+  vaultPda,
+} from "./pda.js";
 export {
   AgentFuelError,
   AccountNotFoundError,
@@ -28,7 +35,14 @@ export {
   HourlyLimitExceededError,
   LifetimeLimitExceededError,
   NotWhitelistedError,
+  RecordPaymentError,
+  ReceiptAlreadyRecordedError,
+  ServiceInactiveError,
 } from "./errors.js";
+export { recordPayment } from "./record-payment.js";
+export type { RecordPaymentArgs, RecordPaymentResult } from "./record-payment.js";
+export { subscribeService, subscribeVault } from "./live.js";
+export type { SubscribeOptions } from "./live.js";
 export { paymentRequired, PaymentParseError } from "./x402.js";
 export type {
   FetchLike,

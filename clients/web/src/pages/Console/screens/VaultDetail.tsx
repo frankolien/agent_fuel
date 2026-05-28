@@ -83,7 +83,16 @@ export function VaultDetail() {
       {vaultQuery.data ? <VaultKpis vault={vaultQuery.data} /> : null}
 
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[1.4fr_1fr]">
-        <Card title="Budget envelope" meta={vaultQuery.data ? "alerts at 70 / 80 / 90%" : "—"}>
+        <Card
+          title="Budget envelope"
+          meta={
+            vaultQuery.data
+              ? vaultQuery.data.lifetime_limit_usdc > 0
+                ? "alerts at 70 / 80 / 90%"
+                : "uncapped — no alerts"
+              : "—"
+          }
+        >
           {vaultQuery.data ? (
             <BudgetEnvelope vault={vaultQuery.data} />
           ) : (
@@ -173,7 +182,8 @@ function VaultKpis({ vault }: { vault: Vault }) {
 
 function BudgetEnvelope({ vault }: { vault: Vault }) {
   const limit = vault.lifetime_limit_usdc;
-  const fraction = limit > 0 ? vault.total_spent / limit : 0;
+  const uncapped = limit <= 0;
+  const fraction = uncapped ? 0 : vault.total_spent / limit;
   const pct = Math.round(fraction * 100);
   const tone: "mint" | "warn" | "danger" = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "mint";
   return (
@@ -184,25 +194,47 @@ function BudgetEnvelope({ vault }: { vault: Vault }) {
             {formatUsdcCompact(vault.total_spent)}
           </div>
           <div className="font-mono text-[11.5px] text-muted">
-            of {limit > 0 ? formatUsdcCompact(limit) : "∞"} spent lifetime
+            of {uncapped ? "∞" : formatUsdcCompact(limit)} spent lifetime
           </div>
         </div>
+        {/* When the vault is uncapped, the "0%" reading is misleading because
+            there's no ceiling to be a percentage of. Show "—" to make the
+            absence intentional rather than a stuck-at-zero bug. */}
         <div
           className={`font-mono text-[14px] ${
-            tone === "danger" ? "text-[#E08577]" : tone === "warn" ? "text-[#E6B86F]" : "text-mint"
+            uncapped
+              ? "text-muted"
+              : tone === "danger"
+                ? "text-[#E08577]"
+                : tone === "warn"
+                  ? "text-[#E6B86F]"
+                  : "text-mint"
           }`}
         >
-          {pct}%
+          {uncapped ? "—" : `${pct}%`}
         </div>
       </div>
-      <Gauge fraction={fraction} thresholds={[0.7, 0.8, 0.9]} tone={tone} height={10} />
-      <div className="flex justify-between font-mono text-[10.5px] text-muted">
-        <span>0%</span>
-        <span>70</span>
-        <span>80</span>
-        <span>90</span>
-        <span>100%</span>
-      </div>
+      {/* No threshold ticks on an uncapped vault — 70/80/90 of ∞ is nonsense.
+          The bar still renders (empty) so the layout doesn't jump. */}
+      <Gauge
+        fraction={fraction}
+        thresholds={uncapped ? [] : [0.7, 0.8, 0.9]}
+        tone={tone}
+        height={10}
+      />
+      {uncapped ? (
+        <div className="font-mono text-[10.5px] text-muted">
+          No lifetime cap set. Edit the policy to add one so alerts at 70 / 80 / 90 % become meaningful.
+        </div>
+      ) : (
+        <div className="flex justify-between font-mono text-[10.5px] text-muted">
+          <span>0%</span>
+          <span>70</span>
+          <span>80</span>
+          <span>90</span>
+          <span>100%</span>
+        </div>
+      )}
     </div>
   );
 }

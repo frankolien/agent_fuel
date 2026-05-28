@@ -106,3 +106,23 @@ export function wsUrl(apiBase: string, path: string): string {
   if (apiBase.startsWith("http://")) return apiBase.replace(/^http/, "ws") + path;
   return apiBase + path;
 }
+
+// Public entity-scoped subscriptions. `AgentFuel.onEvent()` covers the agent
+// channel; these mirror it for the other two entity types so callers without
+// an agent keypair (e.g. a service-side recorder) can also tap the stream.
+
+export function subscribeService(
+  apiBase: string,
+  servicePubkey: string,
+  opts: SubscribeOptions,
+): Subscription {
+  return subscribe(wsUrl(apiBase, `/ws/services/${servicePubkey}`), opts);
+}
+
+export function subscribeVault(
+  apiBase: string,
+  vaultPubkey: string,
+  opts: SubscribeOptions,
+): Subscription {
+  return subscribe(wsUrl(apiBase, `/ws/vaults/${vaultPubkey}`), opts);
+}

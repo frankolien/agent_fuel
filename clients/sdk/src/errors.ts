@@ -108,3 +108,35 @@ export class NotWhitelistedError extends SpendPolicyError {
     this.service = service;
   }
 }
+
+// Reputation program errors — distinct hierarchy from SpendPolicyError because
+// these come from `record_payment`, not the credit vault.
+
+export class RecordPaymentError extends AgentFuelError {
+  constructor(message: string) {
+    super(message);
+    this.name = "RecordPaymentError";
+  }
+}
+
+/// The (service, receipt_hash) pair was already recorded on chain. Idempotent
+/// recorders can catch this and treat it as success — the underlying payment
+/// is already attested. Surfaces from the `init` constraint on the ReceiptUsed
+/// PDA (SystemProgram error 0x0, "account already in use").
+export class ReceiptAlreadyRecordedError extends RecordPaymentError {
+  readonly receiptHash: Uint8Array;
+  constructor(receiptHash: Uint8Array) {
+    super("payment receipt was already recorded on chain");
+    this.name = "ReceiptAlreadyRecordedError";
+    this.receiptHash = receiptHash;
+  }
+}
+
+export class ServiceInactiveError extends RecordPaymentError {
+  readonly service: string;
+  constructor(service: string) {
+    super(`service ${service} is paused; record_payment rejected`);
+    this.name = "ServiceInactiveError";
+    this.service = service;
+  }
+}

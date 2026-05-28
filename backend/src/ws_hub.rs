@@ -121,7 +121,6 @@ pub fn vault_key(pubkey: &str) -> String {
     format!("vault:{pubkey}")
 }
 
-#[allow(dead_code)] // wired into the service-channel route in a follow-up
 pub fn service_key(pubkey: &str) -> String {
     format!("service:{pubkey}")
 }

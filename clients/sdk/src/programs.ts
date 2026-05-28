@@ -87,9 +87,46 @@ export type CreditVaultProgram = {
   };
 };
 
+export type ComputeScoreAccounts = {
+  caller: PublicKey;
+  agentProfile: PublicKey;
+};
+
+type ComputeScoreBuilder = {
+  accounts(accounts: ComputeScoreAccounts): {
+    signers(signers: readonly Keypair[]): {
+      rpc(opts?: ConfirmOptions): Promise<string>;
+    };
+  };
+};
+
+export type RecordPaymentAccounts = {
+  service: PublicKey;
+  agentProfile: PublicKey;
+  serviceRegistry: PublicKey;
+  agentServiceLink: PublicKey;
+  receiptUsed: PublicKey;
+  systemProgram: PublicKey;
+};
+
+type RecordPaymentBuilder = {
+  accounts(accounts: RecordPaymentAccounts): {
+    signers(signers: readonly Keypair[]): {
+      rpc(opts?: ConfirmOptions): Promise<string>;
+    };
+  };
+};
+
 export type ReputationProgram = {
   account: {
     serviceRegistry: Fetchable<RawServiceRegistry>;
+  };
+  methods: {
+    computeScore(): ComputeScoreBuilder;
+    recordPayment(
+      amountUsdc: BN,
+      paymentReceiptHash: number[] | Uint8Array,
+    ): RecordPaymentBuilder;
   };
 };
 

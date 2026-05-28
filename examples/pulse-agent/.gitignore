@@ -1,0 +1,8 @@
+node_modules/
+.env
+.env.local
+dist/
+# Agent identity secret keys — never commit these. The agent's PUBLIC key
+# is fine to share (it's in the env example as part of vault setup); the
+# JSON file at keypairs/*.json contains the SECRET key.
+keypairs/

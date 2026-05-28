@@ -1,0 +1,24 @@
+{
+  "name": "@agent-fuel/example-pulse-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Worked example: a Solana Agent Kit agent funded by an Agent Fuel credit vault, scoped by spend caps and tracked by on-chain reputation.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agent-fuel/sdk": "file:../../clients/sdk",
+    "solana-agent-kit": "^2.0.10"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}

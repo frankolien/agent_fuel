@@ -23,7 +23,13 @@ import {
 } from "./errors.js";
 import { guardSpend } from "./guardrails.js";
 import { subscribe, wsUrl } from "./live.js";
-import { policyPda, serviceRegistryPda, toPubkey, vaultPda } from "./pda.js";
+import {
+  agentProfilePda,
+  policyPda,
+  serviceRegistryPda,
+  toPubkey,
+  vaultPda,
+} from "./pda.js";
 import {
   buildProvider,
   creditVaultProgram,
@@ -194,6 +200,26 @@ export class AgentFuel {
     } catch (err) {
       throw mapSpendError(err, { service, amountUsdc, vault, policy });
     }
+  }
+
+  /// Triggers an on-chain recomputation of the agent's reputation score.
+  /// Permissionless — any signer can call it; we use the agent itself since
+  /// the SDK already has its keypair available and it already pays tx fees
+  /// for spends. The instruction reads the agent's already-public counters
+  /// (volume, diversity, streak, tenure, feedback), recalculates the score
+  /// to a single u16 ≤ 1000, and emits a `ScoreComputed` event. The webhook
+  /// picks that up; the next `getScore()` returns the fresh value.
+  async computeScore(): Promise<{ signature: string }> {
+    const profile = agentProfilePda(this.agentPubkey);
+    const signature = await this.reputation.methods
+      .computeScore()
+      .accounts({
+        caller: this.agentPubkey,
+        agentProfile: profile,
+      })
+      .signers([this.agent])
+      .rpc();
+    return { signature };
   }
 
   onEvent(

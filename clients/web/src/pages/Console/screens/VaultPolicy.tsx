@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
@@ -275,28 +275,73 @@ function CapSlider({
   max: number;
   step: number;
 }) {
+  // Slider is clamped to [min, max]; the input lets users type any value >= 0
+  // (including past `max`) for cases where defaults don't go high enough.
+  const [draft, setDraft] = useState<string>(formatDraft(value));
+  const [focused, setFocused] = useState(false);
+
+  // Keep the input in sync when the slider moves or the parent resets.
+  // While the input is focused we trust the user's in-progress text.
+  useEffect(() => {
+    if (!focused) setDraft(formatDraft(value));
+  }, [value, focused]);
+
+  const commit = (raw: string) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) {
+      setDraft(formatDraft(value));
+      return;
+    }
+    onChange(n);
+    setDraft(formatDraft(n));
+  };
+
   return (
     <div className="grid gap-2">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <span className="text-[13.5px] font-medium text-fg">{label}</span>
-        <span className="font-mono text-[16px] text-fg">${formatNumber(Math.round(value))}</span>
+        <div className="flex items-baseline gap-1 font-mono text-[16px] text-fg">
+          <span className="text-muted">$</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={(e) => {
+              setFocused(false);
+              commit(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+            aria-label={`${label} amount in USDC`}
+            className="w-24 rounded-sm border border-transparent bg-transparent text-right tabular-nums outline-none focus:border-[var(--color-line-2)] focus:bg-surface-2"
+          />
+        </div>
       </div>
       <input
         type="range"
         min={min}
         max={max}
         step={step}
-        value={value}
+        value={Math.min(Math.max(value, min), max)}
         onChange={(e) => onChange(Number(e.target.value))}
         className="h-1 w-full cursor-pointer appearance-none rounded-full bg-surface-2 accent-mint"
       />
       <div className="flex items-baseline justify-between text-[10.5px]">
         <span className="font-mono text-muted">${formatNumber(min)}</span>
         <span className="text-muted">{hint}</span>
-        <span className="font-mono text-muted">${formatNumber(max)}</span>
+        <span className="font-mono text-muted">${formatNumber(max)}+</span>
       </div>
     </div>
   );
+}
+
+function formatDraft(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  // Integers render bare; fractions keep up to 2 decimals (USDC cent precision).
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
