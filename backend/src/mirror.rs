@@ -198,6 +198,7 @@ async fn refresh_vault(pool: &PgPool, pubkey: &str) -> sqlx::Result<()> {
             total_deposited, total_withdrawn, total_spent, total_claimed,
             frozen,
             per_tx_limit_usdc, hourly_limit_usdc, lifetime_limit_usdc, allow_post_pay,
+            whitelist,
             created_slot, last_active_slot, updated_at
         )
         SELECT
@@ -242,6 +243,18 @@ async fn refresh_vault(pool: &PgPool, pubkey: &str) -> sqlx::Result<()> {
                 WHERE event_name = 'PolicyUpdated' AND payload->>'vault' = $1
                 ORDER BY slot DESC, log_index DESC LIMIT 1
             ), FALSE),
+            -- Whitelist: the latest PolicyUpdated emits a fixed-size 8-element
+            -- array with empty slots set to Pubkey::default(); filter those out
+            -- so consumers see only the meaningful entries.
+            COALESCE((
+                SELECT ARRAY(
+                    SELECT v FROM jsonb_array_elements_text(p.payload->'whitelist') v
+                    WHERE v != '11111111111111111111111111111111'
+                )
+                FROM events p
+                WHERE p.event_name = 'PolicyUpdated' AND p.payload->>'vault' = $1
+                ORDER BY p.slot DESC, p.log_index DESC LIMIT 1
+            ), ARRAY[]::TEXT[]),
             (init.payload->>'slot')::bigint,
             COALESCE((SELECT MAX(slot) FROM events
                 WHERE payload->>'vault' = $1), (init.payload->>'slot')::bigint),
@@ -260,6 +273,7 @@ async fn refresh_vault(pool: &PgPool, pubkey: &str) -> sqlx::Result<()> {
             hourly_limit_usdc   = EXCLUDED.hourly_limit_usdc,
             lifetime_limit_usdc = EXCLUDED.lifetime_limit_usdc,
             allow_post_pay      = EXCLUDED.allow_post_pay,
+            whitelist           = EXCLUDED.whitelist,
             last_active_slot    = EXCLUDED.last_active_slot,
             updated_at          = now()
         "#,

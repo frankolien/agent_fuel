@@ -76,6 +76,7 @@ function vault(
     hourly_limit_usdc: toMicro(perHour),
     lifetime_limit_usdc: toMicro(ceiling),
     allow_post_pay: postPay,
+    whitelist: [],
     created_slot: SLOT - 5_000_000,
     last_active_slot: SLOT - 200,
     updated_at: NOW,

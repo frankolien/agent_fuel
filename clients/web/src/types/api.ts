@@ -37,6 +37,8 @@ export type Vault = {
   hourly_limit_usdc: number;
   lifetime_limit_usdc: number;
   allow_post_pay: boolean;
+  /** Base58 service pubkeys; zero-pubkey slots are stripped server-side. */
+  whitelist: string[];
   created_slot: number;
   last_active_slot: number;
   updated_at: string;
@@ -46,6 +48,18 @@ export type Vault = {
 export function vaultBalance(vault: Vault): number {
   return vault.total_deposited - vault.total_withdrawn - vault.total_spent + vault.total_claimed;
 }
+
+export type Service = {
+  pubkey: string;       // service authority (== wallet that registered)
+  registry: string;     // ServiceRegistry PDA
+  name: string;
+  category: "DataFeed" | "Compute" | "Swap" | "Rpc" | "Other";
+  total_agents_served: number;
+  total_volume_received_usdc: number;
+  active: boolean;
+  first_active_slot: number;
+  last_active_slot: number;
+};
 
 export type EventRow = {
   signature: string;

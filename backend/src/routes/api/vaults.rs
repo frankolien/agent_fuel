@@ -24,6 +24,7 @@ pub struct VaultRow {
     pub hourly_limit_usdc: i64,
     pub lifetime_limit_usdc: i64,
     pub allow_post_pay: bool,
+    pub whitelist: Vec<String>,
     pub created_slot: i64,
     pub last_active_slot: i64,
     pub updated_at: DateTime<Utc>,
@@ -34,7 +35,7 @@ pub async fn list(state: web::Data<AppState>, caller: AuthedPubkey) -> impl Resp
     let rows: sqlx::Result<Vec<VaultRow>> = sqlx::query_as(
         "SELECT pubkey, owner, agent, usdc_mint, vault_token_account, total_deposited, \
          total_withdrawn, total_spent, total_claimed, frozen, per_tx_limit_usdc, \
-         hourly_limit_usdc, lifetime_limit_usdc, allow_post_pay, created_slot, last_active_slot, \
+         hourly_limit_usdc, lifetime_limit_usdc, allow_post_pay, whitelist, created_slot, last_active_slot, \
          updated_at \
          FROM vaults WHERE owner = $1 ORDER BY last_active_slot DESC",
     )
@@ -60,7 +61,7 @@ pub async fn detail(
     let row: sqlx::Result<Option<VaultRow>> = sqlx::query_as(
         "SELECT pubkey, owner, agent, usdc_mint, vault_token_account, total_deposited, \
          total_withdrawn, total_spent, total_claimed, frozen, per_tx_limit_usdc, \
-         hourly_limit_usdc, lifetime_limit_usdc, allow_post_pay, created_slot, last_active_slot, \
+         hourly_limit_usdc, lifetime_limit_usdc, allow_post_pay, whitelist, created_slot, last_active_slot, \
          updated_at \
          FROM vaults WHERE pubkey = $1 AND owner = $2",
     )
