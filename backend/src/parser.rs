@@ -36,18 +36,26 @@ pub fn parse(body: &[u8]) -> Result<Vec<ParsedEvent>, ParseError> {
 }
 
 fn parse_one(tx: &Value, out: &mut Vec<ParsedEvent>) {
+    // Helius "raw" webhooks deliver the full `getTransaction` shape — signature
+    // lives at `transaction.signatures[0]`. Enhanced and some custom shapes
+    // surface it as a flat `signature` string. Accept either.
     let signature = tx
         .get("signature")
         .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_owned();
+        .map(str::to_owned)
+        .or_else(|| {
+            tx.pointer("/transaction/signatures/0")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned)
+        })
+        .unwrap_or_default();
     if signature.is_empty() {
         return;
     }
     let slot = tx.get("slot").and_then(|v| v.as_i64()).unwrap_or(0);
 
-    // Enhanced webhooks sometimes nest the transaction; fall back to the
-    // nested path so the same parser works for both shapes.
+    // `meta.logMessages` is the raw shape; `transaction.meta.logMessages` is
+    // the enhanced/nested shape.
     let logs = tx
         .pointer("/meta/logMessages")
         .or_else(|| tx.pointer("/transaction/meta/logMessages"))
@@ -243,6 +251,36 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].log_index, 0);
         assert_eq!(events[1].log_index, 1);
+    }
+
+    #[test]
+    fn parser_reads_signature_from_helius_raw_shape() {
+        // Helius "raw" webhooks deliver the full getTransaction shape: no flat
+        // `signature` field, the signature lives at transaction.signatures[0].
+        // Regression for the bug where every Helius POST 202'd with zero events
+        // parsed because we only checked the top-level field.
+        let event = AgentInitialized {
+            agent: PubkeyBytes([1u8; 32]),
+            owner: PubkeyBytes([2u8; 32]),
+            init_slot: 7,
+        };
+        let b64 = encode_event(&event);
+        let payload = json!([{
+            "slot": 999,
+            "transaction": {
+                "signatures": ["from_helius_raw"],
+                "message": {}
+            },
+            "meta": { "logMessages": [
+                "Program 4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ invoke [1]",
+                format!("Program data: {b64}"),
+                "Program 4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ success"
+            ] }
+        }]);
+        let events = parse(payload.to_string().as_bytes()).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].signature, "from_helius_raw");
+        assert_eq!(events[0].slot, 999);
     }
 
     #[test]

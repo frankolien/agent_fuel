@@ -184,15 +184,16 @@ export function useServicesQuery(): UseQueryResult<Service[]> {
     queryKey: ["services", "list"],
     queryFn: async () => {
       // Backend mirrors the on-chain registry from indexed events — fast and
-      // public. Fall back to a chain scan if the backend is offline so the
-      // screen still renders in dev (or before the indexer catches up).
+      // public. We also fall back to a chain scan if the backend errors *or*
+      // returns empty, so a slow Helius webhook doesn't hide a just-registered
+      // service. Chain is source of truth; backend is the cheap read view.
       try {
         const rows = await api.listServices();
-        return rows.map(normalizeBackendService);
+        if (rows.length > 0) return rows.map(normalizeBackendService);
       } catch (err) {
         console.warn("backend services list failed; falling back to chain", err);
-        return readServicesFromChain(connection);
       }
+      return readServicesFromChain(connection);
     },
     placeholderData: (prev) => prev,
   });

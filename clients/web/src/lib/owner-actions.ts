@@ -5,6 +5,7 @@
 // live here so the SDK can stay browser-agnostic for now.
 
 import { AnchorProvider, BN, Program } from "@coral-xyz/anchor";
+import bs58 from "bs58";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -688,25 +689,46 @@ type ServiceRegistryAccount = {
   lastActiveSlot: BN | number;
 };
 
+// Anchor 0.31 prepends the 8-byte account discriminator to every account
+// payload. We match the discriminator manually so a single stranded account
+// (e.g. one created under an older `ServiceRegistry` layout) doesn't take
+// down the whole list — anchor's `.all()` throws on the first decode error.
+const SERVICE_REGISTRY_DISCRIMINATOR = Uint8Array.from([
+  64, 49, 188, 90, 102, 27, 218, 35,
+]);
+
 /**
- * Discover every ServiceRegistry account on chain. Uses anchor's
- * `account.serviceRegistry.all()` which calls getProgramAccounts under the
- * hood with the discriminator filter. Cheap at current scale.
+ * Discover every ServiceRegistry account on chain. Uses raw
+ * `getProgramAccounts` + per-account try/catch so a single decode failure
+ * (e.g. a stranded pre-upgrade account) doesn't blank the whole list.
  */
 export async function readServicesFromChain(connection: Connection): Promise<Service[]> {
-  // Dummy wallet — `.all()` doesn't sign anything, but anchor wants a Provider.
   const dummy = Keypair.generate();
   const program = buildReputationProgram(connection, readOnlyWallet(dummy.publicKey));
-  const rows = await program.account.serviceRegistry.all();
-  return rows
-    .map(({ publicKey, account }) => {
+  const accounts = await connection.getProgramAccounts(REPUTATION_PROGRAM_ID, {
+    filters: [
+      {
+        memcmp: {
+          offset: 0,
+          bytes: bs58.encode(SERVICE_REGISTRY_DISCRIMINATOR),
+        },
+      },
+    ],
+  });
+  const decoded = await Promise.all(
+    accounts.map(async ({ pubkey }) => {
       try {
-        return composeService(publicKey, account as ServiceRegistryAccount);
+        const acc = (await program.account.serviceRegistry.fetchNullable(
+          pubkey,
+        )) as ServiceRegistryAccount | null;
+        if (!acc) return null;
+        return composeService(pubkey, acc);
       } catch {
         return null;
       }
-    })
-    .filter((s): s is Service => s !== null);
+    }),
+  );
+  return decoded.filter((s): s is Service => s !== null);
 }
 
 function composeService(registry: PublicKey, acc: ServiceRegistryAccount): Service {
@@ -936,9 +958,30 @@ async function sendWithSigners(
   if (extraSigners.length > 0) tx.partialSign(...extraSigners);
   const signed = await wallet.signTransaction(tx);
   const sig = await connection.sendRawTransaction(signed.serialize());
-  await connection.confirmTransaction(
+  // `confirmTransaction` resolves when the tx hits a confirmed block — even
+  // if the tx itself reverted (insufficient SOL, custom program error, etc.).
+  // The actual success/failure lives in `value.err`. Throw on failure so the
+  // UI never claims "Done" for a tx that didn't actually do the thing.
+  const result = await connection.confirmTransaction(
     { signature: sig, blockhash, lastValidBlockHeight },
     "confirmed",
   );
+  if (result.value.err) {
+    throw new TransactionFailedError(sig, result.value.err);
+  }
   return sig;
+}
+
+export class TransactionFailedError extends Error {
+  constructor(
+    public readonly signature: string,
+    public readonly chainError: unknown,
+  ) {
+    const errStr =
+      typeof chainError === "string"
+        ? chainError
+        : JSON.stringify(chainError);
+    super(`Transaction ${signature.slice(0, 8)}… failed on chain: ${errStr}`);
+    this.name = "TransactionFailedError";
+  }
 }
