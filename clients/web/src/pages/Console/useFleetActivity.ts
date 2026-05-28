@@ -3,12 +3,13 @@
 // useFleetTicker directly — that's live-only by design.
 
 import { useMemo } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/app/auth";
 import { api } from "@/lib/api/client";
 import { useAgentsQuery } from "@/lib/api/hooks";
 import { queryKeys } from "@/lib/api/keys";
 import { HttpError } from "@/lib/http";
-import type { EventRow, LiveEventFrame } from "@/types/api";
+import type { Agent, EventRow, LiveEventFrame } from "@/types/api";
 import { useFleetTicker } from "./useFleetTicker";
 
 export type FleetActivityRow = EventRow & { agent_pubkey: string };
@@ -26,16 +27,25 @@ export function useFleetActivity(): FleetActivity {
   const agents = Array.isArray(agentsQuery.data) ? agentsQuery.data : [];
   const live = useFleetTicker();
 
+  // The merged agents list (useAgentsQuery) can include chain-discovered
+  // agents the backend has never indexed — fetching /activity for those
+  // would 404 every time. Re-query the canonical backend list separately so
+  // we only fan activity calls out to agents we know the backend knows.
+  const backendKnown = useBackendKnownAgents();
+  const indexedAgents = useMemo(
+    () => agents.filter((a) => backendKnown.has(a.pubkey)),
+    [agents, backendKnown],
+  );
+
   const histories = useQueries({
-    queries: agents.map((agent) => ({
+    queries: indexedAgents.map((agent) => ({
       queryKey: [...queryKeys.agentActivity(agent.pubkey), "head"],
       queryFn: async (): Promise<EventRow[]> => {
         try {
           return await api.agentActivity(agent.pubkey, {});
         } catch (err) {
-          // 404 = agent not (yet) in the backend's `agents` table — common
-          // for chain-fallback discoveries before the indexer catches up.
-          // Treat as "no history" so live frames still surface.
+          // Belt-and-suspenders: a 404 here means the row was deleted between
+          // listAgents and activity (rare). Treat as empty rather than throwing.
           if (err instanceof HttpError && err.status === 404) return [];
           throw err;
         }
@@ -43,13 +53,6 @@ export function useFleetActivity(): FleetActivity {
       // Activity rows are append-only; a short stale window keeps the screen
       // snappy without hammering the backend on every focus change.
       staleTime: 15_000,
-      // Don't retry 404s — they indicate a real "not indexed" state that won't
-      // change until the next webhook fires (which will invalidate this query
-      // through the live merge anyway).
-      retry: (count: number, err: unknown) => {
-        if (err instanceof HttpError && err.status === 404) return false;
-        return count < 2;
-      },
     })),
   });
 
@@ -59,7 +62,7 @@ export function useFleetActivity(): FleetActivity {
     // Historical first — live frames will overwrite by key if they collide,
     // which is the right precedence (live carries the freshest payload).
     histories.forEach((q, i) => {
-      const owner = agents[i]?.pubkey;
+      const owner = indexedAgents[i]?.pubkey;
       if (!owner) return;
       const data = Array.isArray(q.data) ? q.data : [];
       for (const row of data) {
@@ -80,13 +83,36 @@ export function useFleetActivity(): FleetActivity {
     return Array.from(merged.values())
       .sort((a, b) => b.slot - a.slot || b.log_index - a.log_index)
       .slice(0, PER_AGENT_LIMIT * Math.max(1, agents.length));
-  }, [agents, histories, live]);
+  }, [agents, indexedAgents, histories, live]);
 
   return {
     rows,
     isLoading: agentsQuery.isLoading || histories.some((q) => q.isLoading),
     liveCount: live.length,
   };
+}
+
+// Set of agent pubkeys the backend currently has indexed for this owner.
+// Used to skip /activity fan-outs for chain-only agents (avoids the 404s
+// that previously littered the access log).
+function useBackendKnownAgents(): Set<string> {
+  const { walletPubkey } = useAuth();
+  const query = useQuery({
+    queryKey: walletPubkey
+      ? ["agents", "indexed-set", walletPubkey]
+      : ["agents", "indexed-set", "anon"],
+    queryFn: async () => {
+      try {
+        const rows = await api.listAgents();
+        return Array.isArray(rows) ? rows.map((r: Agent) => r.pubkey) : [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!walletPubkey,
+    staleTime: 30_000,
+  });
+  return useMemo(() => new Set(query.data ?? []), [query.data]);
 }
 
 function key(sig: string, idx: number): string {

@@ -87,8 +87,23 @@ export function useAgentActivityQuery(
 ): UseQueryResult<EventRow[]> {
   return useQuery({
     queryKey: pubkey ? [...queryKeys.agentActivity(pubkey), before ?? "head"] : ["agent-activity", "missing"],
-    queryFn: () => api.agentActivity(pubkey!, before === undefined ? {} : { before_slot: before }),
+    queryFn: async () => {
+      try {
+        return await api.agentActivity(pubkey!, before === undefined ? {} : { before_slot: before });
+      } catch (err) {
+        // Agent exists on-chain but the indexer never saw an AgentInitialized
+        // event for it (created during a broken-webhook window). Treat as
+        // "no history yet" so the page renders cleanly instead of erroring,
+        // and so React Query won't keep retrying a permanent 404.
+        if (err instanceof HttpError && err.status === 404) return [] as EventRow[];
+        throw err;
+      }
+    },
     enabled: !!pubkey,
+    retry: (count, err) => {
+      if (err instanceof HttpError && err.status === 404) return false;
+      return count < 2;
+    },
   });
 }
 
@@ -115,8 +130,21 @@ export function useAgentScoreHistoryQuery(
 ): UseQueryResult<ScorePoint[]> {
   return useQuery({
     queryKey: pubkey ? queryKeys.agentScoreHistory(pubkey) : ["agent-score-history", "missing"],
-    queryFn: () => api.agentScoreHistory(pubkey!),
+    queryFn: async () => {
+      try {
+        return await api.agentScoreHistory(pubkey!);
+      } catch (err) {
+        // Same "not indexed yet" path as agent activity — score history is
+        // gated on the agents row existing.
+        if (err instanceof HttpError && err.status === 404) return [] as ScorePoint[];
+        throw err;
+      }
+    },
     enabled: !!pubkey,
+    retry: (count, err) => {
+      if (err instanceof HttpError && err.status === 404) return false;
+      return count < 2;
+    },
   });
 }
 
@@ -188,8 +216,20 @@ export function useVaultActivityQuery(
 ): UseQueryResult<EventRow[]> {
   return useQuery({
     queryKey: pubkey ? [...queryKeys.vaultActivity(pubkey), before ?? "head"] : ["vault-activity", "missing"],
-    queryFn: () => api.vaultActivity(pubkey!, before === undefined ? {} : { before_slot: before }),
+    queryFn: async () => {
+      try {
+        return await api.vaultActivity(pubkey!, before === undefined ? {} : { before_slot: before });
+      } catch (err) {
+        // Same indexer-gap path as agent activity — unindexed vault → 404.
+        if (err instanceof HttpError && err.status === 404) return [] as EventRow[];
+        throw err;
+      }
+    },
     enabled: !!pubkey,
+    retry: (count, err) => {
+      if (err instanceof HttpError && err.status === 404) return false;
+      return count < 2;
+    },
   });
 }
 
