@@ -66,6 +66,7 @@ pub fn handler(
 
     let slot = Clock::get()?.slot;
     let agent_key = ctx.accounts.agent_profile.key();
+    let agent_authority = ctx.accounts.agent_profile.authority;
     let service_key = ctx.accounts.service_registry.key();
 
     let registry = &mut ctx.accounts.service_registry;
@@ -131,7 +132,7 @@ pub fn handler(
     receipt.bump = ctx.bumps.receipt_used;
 
     emit!(PaymentRecorded {
-        agent: agent_key,
+        agent: agent_authority,
         service: service_key,
         amount_usdc,
         payment_receipt_hash,

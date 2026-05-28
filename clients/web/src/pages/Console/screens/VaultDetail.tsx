@@ -362,6 +362,7 @@ function OwnerActions({ vault }: { vault: Vault }) {
 
   const onToggleFreeze = async () => {
     if (!publicKey || !signTransaction) return;
+    const next = !vault.frozen;
     setFreezing(true);
     try {
       await setFrozen({
@@ -369,12 +370,19 @@ function OwnerActions({ vault }: { vault: Vault }) {
         wallet: { publicKey, signTransaction },
         owner: new PublicKey(vault.owner),
         agent: new PublicKey(vault.agent),
-        frozen: !vault.frozen,
+        frozen: next,
       });
-      await qc.invalidateQueries({ queryKey: queryKeys.vault(vault.pubkey) });
-      toast.success(vault.frozen ? "Vault unfrozen" : "Vault frozen");
+      // Chain is now in the new state, but the backend mirror won't reflect it
+      // until the Helius webhook fires and the indexer processes the event.
+      // Patch the cache so the UI flips immediately; the invalidate keeps the
+      // mirror as the source of truth once it catches up.
+      qc.setQueryData<Vault>(queryKeys.vault(vault.pubkey), (old) =>
+        old ? { ...old, frozen: next } : old,
+      );
+      void qc.invalidateQueries({ queryKey: queryKeys.vault(vault.pubkey) });
+      toast.success(next ? "Vault frozen" : "Vault unfrozen");
     } catch (err) {
-      toast.fromError(err, vault.frozen ? "Unfreeze failed" : "Freeze failed");
+      toast.fromError(err, next ? "Freeze failed" : "Unfreeze failed");
     } finally {
       setFreezing(false);
     }

@@ -137,6 +137,17 @@ struct RpcError {
 /// Backfill an agent's on-chain history through the indexer.
 ///
 /// Derives the AgentProfile PDA from the agent identity, verifies ownership
+/// Derive the AgentProfile PDA for a given agent authority pubkey, returning
+/// the bs58-encoded address. Mirrors the on-chain `[b"agent", authority]`
+/// seeds and the reputation program id baked into this crate.
+pub fn agent_profile_pda(authority_bs58: &str) -> Option<String> {
+    let authority = decode_pubkey(authority_bs58).ok()?;
+    let program_id = decode_pubkey(REPUTATION_PROGRAM_ID_BS58)
+        .expect("reputation program id is a known valid base58 pubkey");
+    let (pda, _bump) = find_program_address(&[AGENT_SEED, &authority], &program_id)?;
+    Some(bs58::encode(pda).into_string())
+}
+
 /// against the on-chain account, then replays every signature touching the
 /// PDA through the parser + mirror pipeline.
 pub async fn backfill_agent(

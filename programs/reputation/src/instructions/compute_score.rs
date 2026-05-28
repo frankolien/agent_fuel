@@ -116,7 +116,7 @@ pub fn handler(ctx: Context<ComputeScore>) -> Result<()> {
     profile.last_active_slot = slot;
 
     emit!(ScoreComputed {
-        agent: profile.key(),
+        agent: profile.authority,
         score,
         slot,
     });
