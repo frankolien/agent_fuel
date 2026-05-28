@@ -101,6 +101,7 @@ fn setup() -> Fixture {
     // register_service
     {
         let accounts = reputation::accounts::RegisterService {
+            sponsor: service.pubkey(),
             service: service.pubkey(),
             service_registry,
             system_program: System::id(),
@@ -111,6 +112,7 @@ fn setup() -> Fixture {
             data: reputation::instruction::RegisterService {
                 name: [0u8; 32],
                 category: ServiceCategory::DataFeed,
+                service_uri: [0u8; 128],
             }
             .data(),
         };
@@ -360,6 +362,7 @@ fn give_feedback_rejects_self_rating_by_authority() {
     // register service (dual is the service)
     {
         let accounts = reputation::accounts::RegisterService {
+            sponsor: dual.pubkey(),
             service: dual.pubkey(),
             service_registry,
             system_program: System::id(),
@@ -370,6 +373,7 @@ fn give_feedback_rejects_self_rating_by_authority() {
             data: reputation::instruction::RegisterService {
                 name: [0u8; 32],
                 category: ServiceCategory::Other,
+                service_uri: [0u8; 128],
             }
             .data(),
         };
@@ -470,6 +474,7 @@ fn give_feedback_rejects_self_rating_by_owner() {
     }
     {
         let accounts = reputation::accounts::RegisterService {
+            sponsor: owner.pubkey(),
             service: owner.pubkey(),
             service_registry,
             system_program: System::id(),
@@ -480,6 +485,7 @@ fn give_feedback_rejects_self_rating_by_owner() {
             data: reputation::instruction::RegisterService {
                 name: [0u8; 32],
                 category: ServiceCategory::Other,
+                service_uri: [0u8; 128],
             }
             .data(),
         };

@@ -87,6 +87,7 @@ fn setup() -> Fixture {
 
     {
         let accounts = reputation::accounts::RegisterService {
+            sponsor: service.pubkey(),
             service: service.pubkey(),
             service_registry,
             system_program: System::id(),
@@ -97,6 +98,7 @@ fn setup() -> Fixture {
             data: reputation::instruction::RegisterService {
                 name: [0u8; 32],
                 category: ServiceCategory::DataFeed,
+                service_uri: [0u8; 128],
             }
             .data(),
         };
@@ -450,6 +452,7 @@ fn record_payment_distinct_services_each_bump_services_used() {
     let registry_b = derive_service_pda(&service_b.pubkey());
     {
         let accounts = reputation::accounts::RegisterService {
+            sponsor: service_b.pubkey(),
             service: service_b.pubkey(),
             service_registry: registry_b,
             system_program: System::id(),
@@ -460,6 +463,7 @@ fn record_payment_distinct_services_each_bump_services_used() {
             data: reputation::instruction::RegisterService {
                 name: [0u8; 32],
                 category: ServiceCategory::Compute,
+                service_uri: [0u8; 128],
             }
             .data(),
         };
@@ -546,6 +550,7 @@ fn record_payment_rejects_cross_pair_receipt_collision() {
     let registry_b = derive_service_pda(&service_b.pubkey());
     {
         let accounts = reputation::accounts::RegisterService {
+            sponsor: service_b.pubkey(),
             service: service_b.pubkey(),
             service_registry: registry_b,
             system_program: System::id(),
@@ -556,6 +561,7 @@ fn record_payment_rejects_cross_pair_receipt_collision() {
             data: reputation::instruction::RegisterService {
                 name: [0u8; 32],
                 category: ServiceCategory::Other,
+                service_uri: [0u8; 128],
             }
             .data(),
         };

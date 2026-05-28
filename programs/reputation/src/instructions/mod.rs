@@ -5,6 +5,7 @@ pub mod initialize_agent;
 pub mod record_payment;
 pub mod register_service;
 pub mod revoke_feedback;
+pub mod set_service_active;
 
 // why: Anchor's #[program] macro discovers generated helpers (`__client_accounts_*`,
 // instruction args structs) through glob re-export. Each instruction module exposes a
@@ -24,3 +25,5 @@ pub use record_payment::*;
 pub use register_service::*;
 #[allow(ambiguous_glob_reexports)]
 pub use revoke_feedback::*;
+#[allow(ambiguous_glob_reexports)]
+pub use set_service_active::*;

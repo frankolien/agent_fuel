@@ -12,9 +12,19 @@ pub struct AgentInitialized {
 #[event]
 pub struct ServiceRegistered {
     pub service: Pubkey,
+    /// Wallet that paid rent. Lets us answer "who registered this service?"
+    /// without an extra column on the on-chain account.
+    pub sponsor: Pubkey,
     pub name: [u8; 32],
     pub category: ServiceCategory,
     pub init_slot: u64,
+}
+
+#[event]
+pub struct ServiceActiveSet {
+    pub service: Pubkey,
+    pub active: bool,
+    pub slot: u64,
 }
 
 #[event]

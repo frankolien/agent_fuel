@@ -39,11 +39,14 @@ fn build_register_ix(
     category: ServiceCategory,
 ) -> Instruction {
     let accounts = reputation::accounts::RegisterService {
-        service: *service,
+        sponsor: *service,
+            service: *service,
         service_registry: *service_registry,
         system_program: System::id(),
     };
-    let args = reputation::instruction::RegisterService { name, category };
+    let args = reputation::instruction::RegisterService { name, category,
+                service_uri: [0u8; 128],
+            };
     Instruction {
         program_id: reputation::ID,
         accounts: accounts.to_account_metas(None),
@@ -118,7 +121,8 @@ fn register_service_rejects_missing_signature() {
     let service_pda = derive_service_pda(&service.pubkey());
 
     let mut metas = reputation::accounts::RegisterService {
-        service: service.pubkey(),
+        sponsor: service.pubkey(),
+            service: service.pubkey(),
         service_registry: service_pda,
         system_program: System::id(),
     }
@@ -139,7 +143,8 @@ fn register_service_rejects_missing_signature() {
         data: reputation::instruction::RegisterService {
             name: [0u8; 32],
             category: ServiceCategory::Other,
-        }
+                service_uri: [0u8; 128],
+            }
         .data(),
     };
 

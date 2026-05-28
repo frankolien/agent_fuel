@@ -153,7 +153,13 @@ type LooseReputationProgram = {
     registerService: (
       name: number[],
       category: Record<string, Record<string, never>>,
+      serviceUri: number[],
     ) => {
+      accounts: (a: Record<string, PublicKey>) => {
+        instruction: () => Promise<TransactionInstruction>;
+      };
+    };
+    setServiceActive: (active: boolean) => {
       accounts: (a: Record<string, PublicKey>) => {
         instruction: () => Promise<TransactionInstruction>;
       };
@@ -241,25 +247,60 @@ export class AgentAlreadyInitializedError extends Error {
 
 export async function registerService(args: {
   connection: Connection;
+  /** Sponsor wallet (Phantom). Pays rent and submits the tx. */
   wallet: Wallet;
+  /**
+   * The service identity keypair — separate from the sponsor wallet. Partial-signs
+   * the tx so it can't be front-run, but the sponsor pays rent so the service
+   * never needs to hold SOL. Pattern mirrors `createVault({ agentKeypair })`.
+   */
+  serviceKeypair: Keypair;
   name: string;
   category: ServiceCategory;
+  /** Off-chain metadata URL (pricing, docs, endpoint). Padded to 128 bytes. */
+  serviceUri?: string;
 }): Promise<{ signature: TransactionSignature; registry: PublicKey }> {
-  const { connection, wallet, name, category } = args;
+  const { connection, wallet, serviceKeypair, name, category, serviceUri = "" } = args;
   if (name.length === 0) throw new Error("service name is required");
   const program = buildReputationProgram(connection, wallet);
-  const registry = serviceRegistryPda(wallet.publicKey);
+  const registry = serviceRegistryPda(serviceKeypair.publicKey);
 
   const ix = await program.methods
-    .registerService(bytesPadded(name, 32), categoryEnum(category))
+    .registerService(bytesPadded(name, 32), categoryEnum(category), bytesPadded(serviceUri, 128))
     .accounts({
-      service: wallet.publicKey,
+      sponsor: wallet.publicKey,
+      service: serviceKeypair.publicKey,
       serviceRegistry: registry,
       systemProgram: SystemProgram.programId,
     })
     .instruction();
-  const signature = await sendOne(connection, wallet, ix);
+  const signature = await sendWithSigners(connection, wallet, [ix], [serviceKeypair]);
   return { signature, registry };
+}
+
+/**
+ * Pause or resume a service. The service authority (keypair downloaded at
+ * registration time) signs alone — the wallet only relays the tx via the user's
+ * sponsor flow if they happen to also be the authority (rare).
+ */
+export async function setServiceActive(args: {
+  connection: Connection;
+  wallet: Wallet;
+  serviceKeypair: Keypair;
+  active: boolean;
+}): Promise<TransactionSignature> {
+  const { connection, wallet, serviceKeypair, active } = args;
+  const program = buildReputationProgram(connection, wallet);
+  const registry = serviceRegistryPda(serviceKeypair.publicKey);
+  const ix = await program.methods
+    .setServiceActive(active)
+    .accounts({
+      service: serviceKeypair.publicKey,
+      serviceRegistry: registry,
+      authority: serviceKeypair.publicKey,
+    })
+    .instruction();
+  return sendWithSigners(connection, wallet, [ix], [serviceKeypair]);
 }
 
 type CreateVaultArgs = {

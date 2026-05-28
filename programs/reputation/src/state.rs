@@ -13,6 +13,9 @@ pub enum ServiceCategory {
 pub struct ServiceRegistry {
     pub authority: Pubkey,
     pub name: [u8; 32],
+    /// Off-chain metadata URI (pricing, docs, endpoint, logo). Padded to 128 bytes;
+    /// trailing NULs are trimmed when read. Mirrors `AgentProfile::agent_uri`.
+    pub service_uri: [u8; 128],
     pub category: ServiceCategory,
     pub total_agents_served: u64,
     pub total_volume_received_usdc: u64,
@@ -24,8 +27,8 @@ pub struct ServiceRegistry {
 }
 
 impl ServiceRegistry {
-    // 8 disc + 32 + 32 + 1 + 8 + 8 + 1 + 8 + 8 + 1 + 64 = 171
-    pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 1 + 8 + 8 + 1 + 8 + 8 + 1 + 64;
+    // 8 disc + 32 + 32 + 128 + 1 + 8 + 8 + 1 + 8 + 8 + 1 + 64 = 299
+    pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 128 + 1 + 8 + 8 + 1 + 8 + 8 + 1 + 64;
 }
 
 #[account]
@@ -148,7 +151,7 @@ mod tests {
 
     #[test]
     fn service_registry_account_size_is_pinned() {
-        assert_eq!(ServiceRegistry::ACCOUNT_SIZE, 171);
+        assert_eq!(ServiceRegistry::ACCOUNT_SIZE, 299);
     }
 
     #[test]

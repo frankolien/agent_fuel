@@ -97,6 +97,7 @@ fn setup_with_value(feedback_value: i8) -> Fixture {
     }
     {
         let accounts = reputation::accounts::RegisterService {
+            sponsor: service.pubkey(),
             service: service.pubkey(),
             service_registry,
             system_program: System::id(),
@@ -107,6 +108,7 @@ fn setup_with_value(feedback_value: i8) -> Fixture {
             data: reputation::instruction::RegisterService {
                 name: [0u8; 32],
                 category: ServiceCategory::DataFeed,
+                service_uri: [0u8; 128],
             }
             .data(),
         };
@@ -373,6 +375,7 @@ fn revoke_feedback_rejects_other_service() {
     let attacker_registry = derive_service_pda(&attacker.pubkey());
     {
         let accounts = reputation::accounts::RegisterService {
+            sponsor: attacker.pubkey(),
             service: attacker.pubkey(),
             service_registry: attacker_registry,
             system_program: System::id(),
@@ -383,6 +386,7 @@ fn revoke_feedback_rejects_other_service() {
             data: reputation::instruction::RegisterService {
                 name: [0u8; 32],
                 category: ServiceCategory::Other,
+                service_uri: [0u8; 128],
             }
             .data(),
         };

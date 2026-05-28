@@ -7,10 +7,9 @@ import { queryKeys } from "@/lib/api/keys";
 import {
   AgentAlreadyInitializedError,
   initializeAgent,
-  registerService,
-  type ServiceCategory,
 } from "@/lib/owner-actions";
 import { AgentModeSelector, type AgentChoice } from "../components/AgentMode";
+import { RegisterServiceModal } from "../components/RegisterServiceModal";
 import { formatNumberCompact, formatUsdcCompact } from "@/lib/format";
 import { Screen } from "./Screen";
 import { ActivityRow } from "../components/ActivityRow";
@@ -301,104 +300,6 @@ function InitializeAgentModal({ onClose }: { onClose: () => void }) {
           <ModalFooter
             submitLabel={status === "submitting" ? "Submitting…" : "Initialize"}
             submitting={submitDisabled}
-            onClose={onClose}
-          />
-        </form>
-      )}
-    </Modal>
-  );
-}
-
-// ---------- Register service ----------
-
-const CATEGORIES: ReadonlyArray<ServiceCategory> = ["DataFeed", "Compute", "Swap", "Rpc", "Other"];
-
-function RegisterServiceModal({ onClose }: { onClose: () => void }) {
-  const { connection } = useConnection();
-  const wallet = useWallet();
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState<ServiceCategory>("Other");
-  const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [signature, setSignature] = useState<string | null>(null);
-  const [registry, setRegistry] = useState<string | null>(null);
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!wallet.publicKey || !wallet.signTransaction) {
-      setError("Wallet not connected");
-      return;
-    }
-    if (!name.trim()) {
-      setError("Name is required");
-      return;
-    }
-    setError(null);
-    setStatus("submitting");
-    try {
-      const { signature: sig, registry: pda } = await registerService({
-        connection,
-        wallet: { publicKey: wallet.publicKey, signTransaction: wallet.signTransaction },
-        name: name.trim(),
-        category,
-      });
-      setSignature(sig);
-      setRegistry(pda.toBase58());
-      setStatus("done");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setStatus("idle");
-    }
-  };
-
-  return (
-    <Modal title="Register service" onClose={onClose}>
-      {status === "done" ? (
-        <DoneState
-          signature={signature ?? ""}
-          message={`Service registered at ${registry?.slice(0, 4)}…${registry?.slice(-4)}.`}
-          onClose={onClose}
-        />
-      ) : (
-        <form onSubmit={onSubmit} className="grid gap-4">
-          <Field label="Service name">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={32}
-              placeholder="e.g. helix-rpc"
-              autoFocus
-              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
-            />
-            <span className="mt-1 font-mono text-[10.5px] text-muted">32 bytes max</span>
-          </Field>
-          <Field label="Category">
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCategory(c)}
-                  className={`rounded-full border px-3 py-1 font-mono text-[11.5px] transition ${
-                    category === c
-                      ? "border-mint bg-mint/15 text-mint"
-                      : "border-[var(--color-line-2)] text-fg-2 hover:bg-surface-2"
-                  }`}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </Field>
-          <p className="m-0 text-[12px] text-muted">
-            Registers your connected wallet as the service authority. Agents check this registry
-            to know which services accept x402 payments.
-          </p>
-          {error && <ErrorLine text={error} />}
-          <ModalFooter
-            submitLabel={status === "submitting" ? "Submitting…" : "Register"}
-            submitting={status === "submitting"}
             onClose={onClose}
           />
         </form>

@@ -7,6 +7,7 @@ import type {
   EventRow,
   ReputationLookup,
   ScorePoint,
+  Service,
   SiwsNonceResponse,
   SiwsVerifyResponse,
   Vault,
@@ -59,6 +60,11 @@ export const api = {
 
   vaultActivity(pubkey: string, query: PageQuery = {}): Promise<EventRow[]> {
     return request(`/api/vaults/${pubkey}/activity`, { query });
+  },
+
+  // ---- Services (public registry) ----
+  listServices(): Promise<Service[]> {
+    return request("/api/services", { anonymous: true });
   },
 
   // ---- Public reputation lookup ----

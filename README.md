@@ -70,6 +70,13 @@ The SDK is the only surface most developers touch. Programs hold the truth — e
 | Sample service registry | `3PCx6TrxQ658Bh9JVNg2JtgtPcRANVfiZsYXmNRMNhgJ` | [view](https://explorer.solana.com/address/3PCx6TrxQ658Bh9JVNg2JtgtPcRANVfiZsYXmNRMNhgJ?cluster=devnet) |
 | Live x402 spend | `3yb8QQ…1qkVe` | [view](https://explorer.solana.com/tx/3yb8QQ8PbGM8N9KAgTmNhoNirWvvgMSyqipDk87jUDdBuqD1UnRvqkZnP5zXf6SXfJZ17KPN25GFomni8391qkVe?cluster=devnet) |
 
+> **Note (May 28, 2026):** the `reputation` program just shipped a breaking
+> upgrade to `register_service` — it now splits `sponsor` (rent payer) and
+> `service` (identity) signers, adds a 128-byte `service_uri` metadata field,
+> and gains a `set_service_active` instruction for pause/resume. Existing
+> ServiceRegistry accounts created before this upgrade can't be deserialized
+> with the new layout; re-register any devnet services you care about.
+
 The vault above was created via the bootstrap script, funded with 20 test-USDC, and then *paid 1 test-USDC to a registered service through the x402 protocol* — a real end-to-end demo verifiable on chain. Re-run it yourself:
 
 ```bash

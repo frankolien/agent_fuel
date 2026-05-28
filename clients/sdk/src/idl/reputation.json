@@ -551,8 +551,12 @@
       ],
       "accounts": [
         {
-          "name": "service",
+          "name": "sponsor",
           "writable": true,
+          "signer": true
+        },
+        {
+          "name": "service",
           "signer": true
         },
         {
@@ -600,6 +604,15 @@
             "defined": {
               "name": "ServiceCategory"
             }
+          }
+        },
+        {
+          "name": "service_uri",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
           }
         }
       ]
@@ -714,6 +727,61 @@
               32
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "set_service_active",
+      "discriminator": [
+        221,
+        172,
+        149,
+        49,
+        212,
+        184,
+        77,
+        101
+      ],
+      "accounts": [
+        {
+          "name": "service",
+          "signer": true
+        },
+        {
+          "name": "service_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  114,
+                  118,
+                  105,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "service"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "relations": [
+            "service_registry"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "active",
+          "type": "bool"
         }
       ]
     }
@@ -865,6 +933,19 @@
       ]
     },
     {
+      "name": "ServiceActiveSet",
+      "discriminator": [
+        151,
+        122,
+        7,
+        40,
+        191,
+        139,
+        237,
+        52
+      ]
+    },
+    {
       "name": "ServiceRegistered",
       "discriminator": [
         25,
@@ -928,6 +1009,11 @@
       "code": 6009,
       "name": "FeedbackRateLimited",
       "msg": "Feedback rate limit not yet expired for this (service, agent) pair"
+    },
+    {
+      "code": 6010,
+      "name": "UnauthorizedService",
+      "msg": "Only the service authority may perform this action"
     }
   ],
   "types": [
@@ -1369,6 +1455,26 @@
       }
     },
     {
+      "name": "ServiceActiveSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "service",
+            "type": "pubkey"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "ServiceCategory",
       "type": {
         "kind": "enum",
@@ -1398,6 +1504,14 @@
         "fields": [
           {
             "name": "service",
+            "type": "pubkey"
+          },
+          {
+            "name": "sponsor",
+            "docs": [
+              "Wallet that paid rent. Lets us answer \"who registered this service?\"",
+              "without an extra column on the on-chain account."
+            ],
             "type": "pubkey"
           },
           {
@@ -1439,6 +1553,19 @@
               "array": [
                 "u8",
                 32
+              ]
+            }
+          },
+          {
+            "name": "service_uri",
+            "docs": [
+              "Off-chain metadata URI (pricing, docs, endpoint, logo). Padded to 128 bytes;",
+              "trailing NULs are trimmed when read. Mirrors `AgentProfile::agent_uri`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
               ]
             }
           },

@@ -102,6 +102,7 @@ fn setup() -> Fixture {
     // register_service
     {
         let accounts = reputation::accounts::RegisterService {
+            sponsor: service.pubkey(),
             service: service.pubkey(),
             service_registry,
             system_program: System::id(),
@@ -112,6 +113,7 @@ fn setup() -> Fixture {
             data: reputation::instruction::RegisterService {
                 name: [0u8; 32],
                 category: ServiceCategory::Compute,
+                service_uri: [0u8; 128],
             }
             .data(),
         };

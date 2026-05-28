@@ -22,4 +22,6 @@ pub enum ReputationError {
     AlreadyRevoked,
     #[msg("Feedback rate limit not yet expired for this (service, agent) pair")]
     FeedbackRateLimited,
+    #[msg("Only the service authority may perform this action")]
+    UnauthorizedService,
 }

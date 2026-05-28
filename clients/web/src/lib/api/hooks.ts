@@ -181,10 +181,54 @@ export function useVaultActivityQuery(
 export function useServicesQuery(): UseQueryResult<Service[]> {
   const { connection } = useConnection();
   return useQuery({
-    queryKey: ["services", "chain"],
-    queryFn: () => readServicesFromChain(connection),
+    queryKey: ["services", "list"],
+    queryFn: async () => {
+      // Backend mirrors the on-chain registry from indexed events — fast and
+      // public. Fall back to a chain scan if the backend is offline so the
+      // screen still renders in dev (or before the indexer catches up).
+      try {
+        const rows = await api.listServices();
+        return rows.map(normalizeBackendService);
+      } catch (err) {
+        console.warn("backend services list failed; falling back to chain", err);
+        return readServicesFromChain(connection);
+      }
+    },
     placeholderData: (prev) => prev,
   });
+}
+
+const CATEGORY_FROM_TAG: Record<number, Service["category"]> = {
+  0: "DataFeed",
+  1: "Compute",
+  2: "Swap",
+  3: "Rpc",
+  4: "Other",
+};
+
+// Backend's ServiceRow uses different field names + an int category tag.
+// Reshape it to the TS `Service` shape consumers expect.
+function normalizeBackendService(row: unknown): Service {
+  const r = row as Record<string, unknown>;
+  const catRaw = r["category"];
+  const category =
+    typeof catRaw === "number"
+      ? (CATEGORY_FROM_TAG[catRaw] ?? "Other")
+      : (catRaw as Service["category"]) || "Other";
+  return {
+    pubkey: String(r["pubkey"] ?? ""),
+    // The backend doesn't expose the registry PDA; derive on the client when
+    // needed via serviceRegistryPda(servicePubkey). Empty string here marks
+    // "fetch from backend" so the UI can't accidentally treat it as a real PDA.
+    registry: "",
+    name: String(r["name"] ?? ""),
+    category,
+    total_agents_served: Number(r["total_agents_served"] ?? 0),
+    total_volume_received_usdc: Number(r["total_volume_received_usdc"] ?? 0),
+    active: Boolean(r["active"] ?? false),
+    first_active_slot: Number(r["init_slot"] ?? r["first_active_slot"] ?? 0),
+    last_active_slot: Number(r["last_active_slot"] ?? 0),
+  };
 }
 
 export function useReputationQuery(

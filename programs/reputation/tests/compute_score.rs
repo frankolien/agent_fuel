@@ -85,7 +85,8 @@ fn register_service(svm: &mut LiteSVM, service: &Keypair, category: ServiceCateg
         .unwrap();
     let service_registry = derive_service_pda(&service.pubkey());
     let accounts = reputation::accounts::RegisterService {
-        service: service.pubkey(),
+        sponsor: service.pubkey(),
+            service: service.pubkey(),
         service_registry,
         system_program: System::id(),
     };
@@ -95,7 +96,8 @@ fn register_service(svm: &mut LiteSVM, service: &Keypair, category: ServiceCateg
         data: reputation::instruction::RegisterService {
             name: [0u8; 32],
             category,
-        }
+                service_uri: [0u8; 128],
+            }
         .data(),
     };
     let blockhash = svm.latest_blockhash();

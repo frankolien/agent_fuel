@@ -22,7 +22,7 @@ pub fn affected(events: &[ParsedEvent]) -> Affected {
                     a.agents.insert(s.to_owned());
                 }
             }
-            "ServiceRegistered" => {
+            "ServiceRegistered" | "ServiceActiveSet" => {
                 if let Some(s) = p["service"].as_str() {
                     a.services.insert(s.to_owned());
                 }
@@ -158,7 +158,13 @@ async fn refresh_service(pool: &PgPool, pubkey: &str) -> sqlx::Result<()> {
             $1,
             init.payload->>'name',
             (init.payload->>'category')::smallint,
-            TRUE,
+            -- Active starts TRUE at registration; flipped by ServiceActiveSet.
+            -- Latest active-set event wins; if none, default to TRUE.
+            COALESCE((
+                SELECT (payload->>'active')::boolean FROM events
+                WHERE event_name = 'ServiceActiveSet' AND payload->>'service' = $1
+                ORDER BY slot DESC, log_index DESC LIMIT 1
+            ), TRUE),
             (init.payload->>'init_slot')::bigint,
             COALESCE((SELECT COUNT(*) FROM events
                 WHERE event_name = 'PaymentRecorded'
@@ -176,6 +182,7 @@ async fn refresh_service(pool: &PgPool, pubkey: &str) -> sqlx::Result<()> {
         ON CONFLICT (pubkey) DO UPDATE SET
             name                       = EXCLUDED.name,
             category                   = EXCLUDED.category,
+            active                     = EXCLUDED.active,
             total_agents_served        = EXCLUDED.total_agents_served,
             total_volume_received_usdc = EXCLUDED.total_volume_received_usdc,
             last_active_slot           = EXCLUDED.last_active_slot,

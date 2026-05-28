@@ -42,8 +42,16 @@ pub mod reputation {
         ctx: Context<RegisterService>,
         name: [u8; 32],
         category: state::ServiceCategory,
+        service_uri: [u8; 128],
     ) -> Result<()> {
-        instructions::register_service::handler(ctx, name, category)
+        instructions::register_service::handler(ctx, name, category, service_uri)
+    }
+
+    pub fn set_service_active(
+        ctx: Context<SetServiceActive>,
+        active: bool,
+    ) -> Result<()> {
+        instructions::set_service_active::handler(ctx, active)
     }
 
     pub fn record_payment(

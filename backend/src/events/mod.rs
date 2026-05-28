@@ -58,6 +58,7 @@ pub fn decode(raw: &[u8]) -> Result<Option<DecodedEvent>, DecodeError> {
     dispatch!(
         reputation::AgentInitialized,
         reputation::ServiceRegistered,
+        reputation::ServiceActiveSet,
         reputation::PaymentRecorded,
         reputation::FeedbackGiven,
         reputation::ResponseAppended,
@@ -102,6 +103,7 @@ mod tests {
         let names: &[[u8; 8]] = &[
             reputation::AgentInitialized::discriminator(),
             reputation::ServiceRegistered::discriminator(),
+            reputation::ServiceActiveSet::discriminator(),
             reputation::PaymentRecorded::discriminator(),
             reputation::FeedbackGiven::discriminator(),
             reputation::ResponseAppended::discriminator(),
@@ -181,6 +183,7 @@ mod tests {
     #[derive(BorshSerialize)]
     struct ServiceRegWire {
         service: [u8; 32],
+        sponsor: [u8; 32],
         name: [u8; 32],
         category: u8,
         init_slot: u64,
@@ -192,6 +195,7 @@ mod tests {
         name[..6].copy_from_slice(b"oracle");
         let wire = ServiceRegWire {
             service: [7u8; 32],
+            sponsor: [8u8; 32],
             name,
             category: 0,
             init_slot: 100,
@@ -202,6 +206,10 @@ mod tests {
         let decoded = decode(&raw).unwrap().expect("must dispatch");
         assert_eq!(decoded.payload["name"], "oracle");
         assert_eq!(decoded.payload["category"], 0);
+        assert_eq!(
+            decoded.payload["sponsor"].as_str().unwrap(),
+            bs58::encode([8u8; 32]).into_string()
+        );
     }
 
     #[test]

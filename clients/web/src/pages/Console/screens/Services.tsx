@@ -1,14 +1,12 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { useServicesQuery } from "@/lib/api/hooks";
 import { formatNumberCompact, formatUsdcCompact, shortPubkey } from "@/lib/format";
-import { registerService, type ServiceCategory } from "@/lib/owner-actions";
 import type { Service } from "@/types/api";
+import { RegisterServiceModal } from "../components/RegisterServiceModal";
+import { SetServiceActiveModal } from "../components/SetServiceActiveModal";
 import { Screen } from "./Screen";
 import { SkeletonRows } from "../components/Skeleton";
-
-const CATEGORIES: ServiceCategory[] = ["DataFeed", "Compute", "Swap", "Rpc", "Other"];
 
 const CATEGORY_LABEL: Record<Service["category"], string> = {
   DataFeed: "data feed",
@@ -18,10 +16,13 @@ const CATEGORY_LABEL: Record<Service["category"], string> = {
   Other: "other",
 };
 
+type ToggleTarget = { service: Service; nextActive: boolean };
+
 export function Services() {
   const { data, isLoading, error } = useServicesQuery();
   const { publicKey } = useWallet();
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [toggleTarget, setToggleTarget] = useState<ToggleTarget | null>(null);
 
   return (
     <Screen
@@ -55,13 +56,32 @@ export function Services() {
     >
       {isLoading ? <SkeletonRows rows={6} height={56} /> : null}
       {error ? <ErrorState message={(error as Error).message} /> : null}
-      {data ? <ServicesTable services={data} /> : null}
+      {data ? (
+        <ServicesTable
+          services={data}
+          onToggleActive={(service, nextActive) => setToggleTarget({ service, nextActive })}
+        />
+      ) : null}
       {registerOpen && <RegisterServiceModal onClose={() => setRegisterOpen(false)} />}
+      {toggleTarget && (
+        <SetServiceActiveModal
+          serviceLabel={toggleTarget.service.name || shortPubkey(toggleTarget.service.pubkey)}
+          expectedServicePubkey={toggleTarget.service.pubkey}
+          setActive={toggleTarget.nextActive}
+          onClose={() => setToggleTarget(null)}
+        />
+      )}
     </Screen>
   );
 }
 
-function ServicesTable({ services }: { services: ReadonlyArray<Service> }) {
+function ServicesTable({
+  services,
+  onToggleActive,
+}: {
+  services: ReadonlyArray<Service>;
+  onToggleActive: (service: Service, nextActive: boolean) => void;
+}) {
   if (services.length === 0) {
     return (
       <div className="grid place-items-center rounded-[10px] border border-dashed border-white/[0.09] bg-surface/40 px-6 py-20 text-center text-[13px] text-muted">
@@ -84,11 +104,16 @@ function ServicesTable({ services }: { services: ReadonlyArray<Service> }) {
             <Th align="right">Agents served</Th>
             <Th align="right">Status</Th>
             <Th>Address</Th>
+            <Th align="right">&nbsp;</Th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((svc) => (
-            <ServiceRow key={svc.registry} service={svc} />
+            <ServiceRow
+              key={svc.pubkey}
+              service={svc}
+              onToggleActive={onToggleActive}
+            />
           ))}
         </tbody>
       </table>
@@ -96,7 +121,13 @@ function ServicesTable({ services }: { services: ReadonlyArray<Service> }) {
   );
 }
 
-function ServiceRow({ service }: { service: Service }) {
+function ServiceRow({
+  service,
+  onToggleActive,
+}: {
+  service: Service;
+  onToggleActive: (service: Service, nextActive: boolean) => void;
+}) {
   return (
     <tr className="border-t border-white/[0.05] hover:bg-white/[0.02]">
       <Td>
@@ -127,13 +158,23 @@ function ServiceRow({ service }: { service: Service }) {
             active
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2 py-0.5 font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">
-            inactive
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6B86F14] px-2 py-0.5 font-mono text-[10.5px] tracking-[0.06em] text-[#E6B86F] uppercase">
+            paused
           </span>
         )}
       </Td>
       <Td>
         <CopyAddress address={service.pubkey} />
+      </Td>
+      <Td align="right">
+        <button
+          type="button"
+          onClick={() => onToggleActive(service, !service.active)}
+          className="rounded-full border border-[var(--color-line-2)] px-3 py-0.5 font-mono text-[10.5px] text-fg-2 hover:bg-surface-2"
+          title="Requires the service keypair JSON"
+        >
+          {service.active ? "Pause" : "Resume"}
+        </button>
       </Td>
     </tr>
   );
@@ -171,189 +212,6 @@ function CopyAddress({ address }: { address: string }) {
       <span>{shortPubkey(address)}</span>
       <span className="text-muted group-hover:text-fg-2">{copied ? "✓" : "⧉"}</span>
     </button>
-  );
-}
-
-function RegisterServiceModal({ onClose }: { onClose: () => void }) {
-  const { connection } = useConnection();
-  const wallet = useWallet();
-  const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState<ServiceCategory>("Other");
-  const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [signature, setSignature] = useState<string | null>(null);
-  const [registry, setRegistry] = useState<string | null>(null);
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!wallet.publicKey || !wallet.signTransaction) {
-      setError("Wallet not connected");
-      return;
-    }
-    if (!name.trim()) {
-      setError("Name is required");
-      return;
-    }
-    setError(null);
-    setStatus("submitting");
-    try {
-      const { signature: sig, registry: pda } = await registerService({
-        connection,
-        wallet: { publicKey: wallet.publicKey, signTransaction: wallet.signTransaction },
-        name: name.trim(),
-        category,
-      });
-      setSignature(sig);
-      setRegistry(pda.toBase58());
-      setStatus("done");
-      await qc.invalidateQueries({ queryKey: ["services"] });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setStatus("idle");
-    }
-  };
-
-  return (
-    <Modal title="Register service" onClose={onClose}>
-      {status === "done" ? (
-        <div className="grid gap-4">
-          <p className="m-0 text-[14px] text-fg-2">
-            Registered. Agents can now spend USDC against this service via x402.
-          </p>
-          <Labelled label="Registry">
-            <span className="block truncate font-mono text-[12px] text-mint-soft">{registry}</span>
-          </Labelled>
-          {signature ? (
-            <a
-              href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block truncate font-mono text-[11.5px] text-muted hover:text-fg"
-            >
-              tx {signature}
-            </a>
-          ) : null}
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full bg-mint px-4 py-2 text-[12.5px] font-semibold text-bg hover:bg-mint-soft"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      ) : (
-        <form onSubmit={onSubmit} className="grid gap-4">
-          <Field label="Service name">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={32}
-              placeholder="e.g. helix-rpc"
-              autoFocus
-              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
-            />
-            <span className="mt-1 font-mono text-[10.5px] text-muted">32 bytes max</span>
-          </Field>
-          <Field label="Category">
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCategory(c)}
-                  className={`rounded-full border px-3 py-1 font-mono text-[11.5px] transition ${
-                    category === c
-                      ? "border-mint bg-mint/15 text-mint"
-                      : "border-[var(--color-line-2)] text-fg-2 hover:bg-surface-2"
-                  }`}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </Field>
-          <p className="m-0 text-[12px] text-muted">
-            Registers your connected wallet (
-            <span className="font-mono">
-              {wallet.publicKey ? shortPubkey(wallet.publicKey.toBase58()) : "—"}
-            </span>
-            ) as the service authority. One service per wallet.
-          </p>
-          {error && (
-            <div className="rounded-md border border-[#E0857733] bg-[#E0857714] px-3 py-2 text-[12px] text-[#E08577]">
-              {error}
-            </div>
-          )}
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full border border-[var(--color-line)] px-4 py-2 text-[12.5px] text-fg-2 hover:bg-surface-2"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={status === "submitting"}
-              className="rounded-full bg-mint px-4 py-2 text-[12.5px] font-semibold text-bg hover:bg-mint-soft disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {status === "submitting" ? "Submitting…" : "Register"}
-            </button>
-          </div>
-        </form>
-      )}
-    </Modal>
-  );
-}
-
-function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-[440px] rounded-[16px] border border-[var(--color-line-2)] bg-surface p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-5 flex items-center justify-between">
-          <h3 className="m-0 text-[16px] font-semibold tracking-[-0.005em]">{title}</h3>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-muted hover:text-fg">
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="grid gap-1.5">
-      <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function Labelled({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid gap-1.5">
-      <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">{label}</span>
-      {children}
-    </div>
   );
 }
 

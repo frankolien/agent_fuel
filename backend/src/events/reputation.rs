@@ -18,12 +18,21 @@ __anchor_event_disc_impl!(AgentInitialized, "AgentInitialized");
 #[derive(Debug, BorshSerialize, BorshDeserialize, Serialize)]
 pub struct ServiceRegistered {
     pub service: PubkeyBytes,
+    pub sponsor: PubkeyBytes,
     pub name: NameBytes,
     // 0..=4 — ServiceCategory variant tag from the on-chain `#[repr(u8)]` enum.
     pub category: u8,
     pub init_slot: u64,
 }
 __anchor_event_disc_impl!(ServiceRegistered, "ServiceRegistered");
+
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize)]
+pub struct ServiceActiveSet {
+    pub service: PubkeyBytes,
+    pub active: bool,
+    pub slot: u64,
+}
+__anchor_event_disc_impl!(ServiceActiveSet, "ServiceActiveSet");
 
 #[derive(Debug, BorshSerialize, BorshDeserialize, Serialize)]
 pub struct PaymentRecorded {

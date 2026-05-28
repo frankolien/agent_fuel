@@ -3,6 +3,7 @@ use actix_web::web;
 pub mod agents;
 pub mod devices;
 pub mod pagination;
+pub mod services;
 pub mod vaults;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
@@ -13,6 +14,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(vaults::list)
         .service(vaults::detail)
         .service(vaults::activity)
+        .service(services::list)
         .service(devices::register)
         .service(devices::unregister);
 }
