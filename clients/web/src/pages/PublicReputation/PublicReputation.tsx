@@ -3,7 +3,7 @@ import { Brand } from "@/components/Brand/Brand";
 import { useReputationQuery } from "@/lib/api/hooks";
 import { formatNumber, formatNumberCompact, formatUsdcCompact, shortPubkey } from "@/lib/format";
 import type { ReputationLookup } from "@/types/api";
-import { tierFor } from "@/pages/Console/components/ScoreBadge";
+import { tierFor } from "@/lib/tier";
 
 export function PublicReputation() {
   const { agent = "" } = useParams<{ agent: string }>();

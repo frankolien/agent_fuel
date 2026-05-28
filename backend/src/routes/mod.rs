@@ -29,6 +29,7 @@ pub fn configure(
         .service(auth::nonce)
         .service(auth::verify)
         .service(ws::agent_stream)
+        .service(ws::vault_stream)
         .service(
             web::resource("/reputation/{agent}")
                 .wrap(Governor::new(reputation_rate_limit))

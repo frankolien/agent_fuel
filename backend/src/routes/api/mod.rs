@@ -13,6 +13,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(agents::activity)
         .service(agents::score_history)
         .service(backfill::agent)
+        .service(backfill::vault)
         .service(vaults::list)
         .service(vaults::detail)
         .service(vaults::activity)

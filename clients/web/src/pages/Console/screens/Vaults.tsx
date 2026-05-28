@@ -5,6 +5,7 @@ import { PublicKey } from "@solana/web3.js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVaultsQuery } from "@/lib/api/hooks";
 import { queryKeys } from "@/lib/api/keys";
+import { errorMessage } from "@/lib/error";
 import { createVault } from "@/lib/owner-actions";
 import { AgentModeSelector, type AgentChoice } from "../components/AgentMode";
 import {
@@ -52,7 +53,7 @@ export function Vaults() {
       }
     >
       {isLoading ? <SkeletonRows rows={6} height={68} /> : null}
-      {error ? <ErrorState message={(error as Error).message} /> : null}
+      {error ? <ErrorState message={errorMessage(error)} /> : null}
       {data ? <VaultsTable vaults={data} /> : null}
       {createOpen && <CreateVaultModal onClose={() => setCreateOpen(false)} />}
     </Screen>

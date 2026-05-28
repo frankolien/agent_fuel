@@ -1,5 +1,7 @@
-// Per-agent live event stream. Wraps the backend's /ws/agents/:pk endpoint
-// behind a callback API with reconnect.
+// Entity-scoped live event streams. Wraps the backend's /ws/agents/:pk and
+// /ws/vaults/:pk endpoints behind a callback API with exponential-backoff
+// reconnect. The transport is identical between the two — only the URL path
+// (and therefore which broadcast key the backend subscribes to) differs.
 
 import { config } from "../config";
 import type { LiveEventFrame } from "@/types/api";
@@ -16,12 +18,32 @@ export function subscribeAgent(
   onFrame: FrameHandler,
   onStatus?: StatusHandler,
 ): LiveSubscription {
+  return subscribeChannel(`/ws/agents/${pubkey}`, onFrame, onStatus);
+}
+
+/** Vault analogue of `subscribeAgent`. Receives every event whose payload
+ *  carries this vault pubkey — Deposited, Spent, Claimed, VaultFrozen, etc.
+ *  None of these flowed through the `/ws/agents/:pk` channel because vault
+ *  events don't always carry an `agent` field. */
+export function subscribeVault(
+  pubkey: string,
+  onFrame: FrameHandler,
+  onStatus?: StatusHandler,
+): LiveSubscription {
+  return subscribeChannel(`/ws/vaults/${pubkey}`, onFrame, onStatus);
+}
+
+function subscribeChannel(
+  path: string,
+  onFrame: FrameHandler,
+  onStatus?: StatusHandler,
+): LiveSubscription {
   let socket: WebSocket | null = null;
   let alive = true;
   let attempts = 0;
   let reconnectTimer: number | null = null;
 
-  const url = wsUrl(`/ws/agents/${pubkey}`);
+  const url = wsUrl(path);
 
   function emit(status: LiveStatus) {
     onStatus?.(status);

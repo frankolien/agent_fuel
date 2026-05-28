@@ -1,5 +1,6 @@
-import { QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryClient } from "@tanstack/react-query";
 import { HttpError } from "@/lib/http";
+import { toast } from "@/lib/toast";
 
 // One client per app. Defaults chosen for an authed dashboard:
 //   • staleTime 30s — most screens (agents/vaults) tolerate stale data while
@@ -20,4 +21,14 @@ export const queryClient = new QueryClient({
       },
     },
   },
+  // Mutations are explicit user actions — when one fails (backfill, register
+  // service, create vault) the user expects feedback. A cache-level handler
+  // means individual mutations can opt out by defining their own onError, but
+  // by default every failure surfaces as a toast.
+  mutationCache: new MutationCache({
+    onError: (error, _vars, _ctx, mutation) => {
+      if (mutation.options.onError) return; // mutation handled it itself
+      toast.fromError(error);
+    },
+  }),
 });

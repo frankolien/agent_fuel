@@ -4,6 +4,7 @@ use actix_web::{get, web, HttpRequest, HttpResponse};
 use futures_util::StreamExt;
 
 use crate::state::AppState;
+use crate::ws_hub::{agent_key, vault_key};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 const CLIENT_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
@@ -15,9 +16,29 @@ pub async fn agent_stream(
     state: web::Data<AppState>,
     path: web::Path<String>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    let agent = path.into_inner();
+    let key = agent_key(&path.into_inner());
+    serve_stream(req, body, &state, key).await
+}
+
+#[get("/ws/vaults/{pubkey}")]
+pub async fn vault_stream(
+    req: HttpRequest,
+    body: web::Payload,
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, actix_web::Error> {
+    let key = vault_key(&path.into_inner());
+    serve_stream(req, body, &state, key).await
+}
+
+async fn serve_stream(
+    req: HttpRequest,
+    body: web::Payload,
+    state: &web::Data<AppState>,
+    channel_key: String,
+) -> Result<HttpResponse, actix_web::Error> {
     let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
-    let mut rx = state.ws_hub.subscribe(&agent);
+    let mut rx = state.ws_hub.subscribe(&channel_key);
 
     actix_web::rt::spawn(async move {
         let mut last_pong = std::time::Instant::now();

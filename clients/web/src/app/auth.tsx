@@ -47,6 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+// The hook + provider are intentionally colocated — both share the private
+// `AuthContext` and splitting them would either expose the context or
+// duplicate it. The fast-refresh penalty (full reload when editing this
+// file in dev) is an acceptable tradeoff for a file that changes rarely.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");

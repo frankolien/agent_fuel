@@ -21,6 +21,7 @@ import type {
 } from "@/types/api";
 import { useAuth } from "@/app/auth";
 import { HttpError } from "@/lib/http";
+import { toast } from "@/lib/toast";
 import {
   readAgentFromChain,
   readAgentsFromChainByOwner,
@@ -306,7 +307,7 @@ export function useBackfillAgent(
       if (!pubkey) throw new Error("pubkey required");
       return api.backfillAgent(pubkey);
     },
-    onSuccess: () => {
+    onSuccess: (report) => {
       if (!pubkey) return;
       // The detail row + score history + activity all derive from the same
       // event stream that backfill just populated. Force-fresh them all.
@@ -314,6 +315,53 @@ export function useBackfillAgent(
       qc.invalidateQueries({ queryKey: queryKeys.agentActivity(pubkey) });
       qc.invalidateQueries({ queryKey: queryKeys.agentScoreHistory(pubkey) });
       qc.invalidateQueries({ queryKey: queryKeys.agents() });
+      // Distinguish "just brought this agent online" from "nothing new" — the
+      // second case (events_inserted === 0) is normal on a replay and shouldn't
+      // claim credit for ingesting anything.
+      if (report.events_inserted > 0) {
+        toast.success(`Backfilled ${report.events_inserted} event${report.events_inserted === 1 ? "" : "s"}`, {
+          detail: `${report.signatures_scanned} signatures scanned · ${report.transactions_parsed} parsed`,
+        });
+      } else {
+        toast.info("Already up to date", {
+          detail: `${report.signatures_scanned} signatures scanned, nothing new to index`,
+        });
+      }
+    },
+    onError: (err) => {
+      toast.fromError(err, "Backfill failed");
+    },
+  });
+}
+
+/** Vault analogue of `useBackfillAgent`. Replays VaultCreated + every
+ *  subsequent vault event for this PDA, then refreshes the dependent caches. */
+export function useBackfillVault(
+  pubkey: string | undefined,
+): UseMutationResult<BackfillReport, Error, void> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => {
+      if (!pubkey) throw new Error("pubkey required");
+      return api.backfillVault(pubkey);
+    },
+    onSuccess: (report) => {
+      if (!pubkey) return;
+      qc.invalidateQueries({ queryKey: queryKeys.vault(pubkey) });
+      qc.invalidateQueries({ queryKey: queryKeys.vaultActivity(pubkey) });
+      qc.invalidateQueries({ queryKey: queryKeys.vaults() });
+      if (report.events_inserted > 0) {
+        toast.success(`Backfilled ${report.events_inserted} event${report.events_inserted === 1 ? "" : "s"}`, {
+          detail: `${report.signatures_scanned} signatures scanned · ${report.transactions_parsed} parsed`,
+        });
+      } else {
+        toast.info("Already up to date", {
+          detail: `${report.signatures_scanned} signatures scanned, nothing new to index`,
+        });
+      }
+    },
+    onError: (err) => {
+      toast.fromError(err, "Backfill failed");
     },
   });
 }

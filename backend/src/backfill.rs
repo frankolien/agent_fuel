@@ -59,6 +59,14 @@ pub struct BackfillReport {
 const REPUTATION_PROGRAM_ID_BS58: &str = "4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ";
 const AGENT_SEED: &[u8] = b"agent";
 
+/// AgentProfile layout: [discriminator(8)][authority(32)][owner(32)][…]
+/// — owner sits at byte 40.
+const AGENT_OWNER_OFFSET: usize = 40;
+/// CreditVault layout: [discriminator(8)][owner(32)][agent(32)][…]
+/// — owner sits at byte 8. Same as the program's state struct definition;
+/// vault PDA is provided directly by the URL so no derivation is needed.
+const VAULT_OWNER_OFFSET: usize = 8;
+
 /// Hard cap on signatures fetched in one backfill run. Solana RPCs cap a
 /// single `getSignaturesForAddress` page at 1000; for an agent fresh out of
 /// the broken-webhook window, the realistic count is in the tens. The cap
@@ -126,15 +134,11 @@ struct RpcError {
     message: String,
 }
 
-/// Backfill one agent.
+/// Backfill an agent's on-chain history through the indexer.
 ///
-/// Steps:
-/// 1. Derive the AgentProfile PDA.
-/// 2. Fetch the account; verify it exists and `owner == expected_owner`.
-/// 3. Paginate signatures touching the PDA.
-/// 4. Fetch each transaction; pass through `parser::parse` (it already
-///    accepts the raw `getTransaction` shape).
-/// 5. Persist events + refresh mirrors.
+/// Derives the AgentProfile PDA from the agent identity, verifies ownership
+/// against the on-chain account, then replays every signature touching the
+/// PDA through the parser + mirror pipeline.
 pub async fn backfill_agent(
     pool: &PgPool,
     rpc: &RpcClient,
@@ -144,37 +148,75 @@ pub async fn backfill_agent(
     let agent_pubkey = decode_pubkey(agent_pubkey_bs58)?;
     let program_id = decode_pubkey(REPUTATION_PROGRAM_ID_BS58)
         .expect("reputation program id is a known valid base58 pubkey");
-
     let (pda, _bump) = find_program_address(&[AGENT_SEED, &agent_pubkey], &program_id)
         .ok_or_else(|| BackfillError::Rpc("PDA derivation failed".into()))?;
     let pda_bs58 = bs58::encode(pda).into_string();
 
-    // Owner check before any expensive RPC paging — short-circuits abuse.
-    let profile = fetch_account_data(rpc, &pda_bs58).await?;
-    let Some(profile) = profile else {
+    verify_owner(rpc, &pda_bs58, expected_owner_bs58, AGENT_OWNER_OFFSET).await?;
+    replay_address_history(pool, rpc, &pda_bs58, "agent", agent_pubkey_bs58).await
+}
+
+/// Backfill a vault's on-chain history through the indexer.
+///
+/// The vault pubkey from the URL IS its PDA (Anchor `init` creates the
+/// account at the PDA address), so no derivation is needed — we fetch and
+/// scan directly.
+pub async fn backfill_vault(
+    pool: &PgPool,
+    rpc: &RpcClient,
+    vault_pubkey_bs58: &str,
+    expected_owner_bs58: &str,
+) -> Result<BackfillReport, BackfillError> {
+    // Validate up front so a typo gives 400 not 404-from-RPC.
+    decode_pubkey(vault_pubkey_bs58)?;
+    verify_owner(rpc, vault_pubkey_bs58, expected_owner_bs58, VAULT_OWNER_OFFSET).await?;
+    replay_address_history(pool, rpc, vault_pubkey_bs58, "vault", vault_pubkey_bs58).await
+}
+
+/// Fetches the on-chain account, returns an error if it doesn't exist or
+/// the owner field at `owner_offset` doesn't match the expected pubkey.
+async fn verify_owner(
+    rpc: &RpcClient,
+    address_bs58: &str,
+    expected_owner_bs58: &str,
+    owner_offset: usize,
+) -> Result<(), BackfillError> {
+    let Some(data) = fetch_account_data(rpc, address_bs58).await? else {
         return Err(BackfillError::AgentNotFound);
     };
-    let expected_owner_bytes = decode_pubkey(expected_owner_bs58)?;
-    if !owner_matches(&profile, &expected_owner_bytes) {
+    let expected = decode_pubkey(expected_owner_bs58)?;
+    if !owner_matches_at(&data, &expected, owner_offset) {
         return Err(BackfillError::OwnerMismatch);
     }
+    Ok(())
+}
 
-    let signatures = fetch_signatures(rpc, &pda_bs58).await?;
+/// The shared replay pipeline: page signatures touching `address`, fetch
+/// each tx, parse, persist, refresh mirrors. The owner check happens before
+/// this is invoked — calling it directly skips authorization, so keep it
+/// private.
+async fn replay_address_history(
+    pool: &PgPool,
+    rpc: &RpcClient,
+    address_bs58: &str,
+    entity_kind: &'static str,
+    entity_id_for_log: &str,
+) -> Result<BackfillReport, BackfillError> {
+    let signatures = fetch_signatures(rpc, address_bs58).await?;
     let mut report = BackfillReport {
         signatures_scanned: signatures.len(),
         ..BackfillReport::default()
     };
 
-    // Collect parsed events from every tx, then persist + refresh as a single
-    // batch. Doing the inserts per-tx would multiply round-trips needlessly,
-    // and the mirror refresh has to see the full set to converge correctly.
+    // Batch the persist + mirror refresh so we make a single DB round-trip
+    // and the mirror sees the full event set when it converges.
     let mut all_events = Vec::new();
     for sig in &signatures {
         let Some(tx_json) = fetch_transaction(rpc, sig).await? else {
             continue;
         };
-        // Reuse the same parser as the webhook path. It already accepts the
-        // raw `getTransaction` shape (signature nested under `transaction`,
+        // Reuse the webhook parser — it already accepts the raw
+        // `getTransaction` shape (signature under `transaction.signatures[0]`,
         // logs under `meta.logMessages`).
         let body = serde_json::to_vec(&tx_json).map_err(|e| BackfillError::Rpc(e.to_string()))?;
         match parser::parse(&body) {
@@ -196,7 +238,8 @@ pub async fn backfill_agent(
     let affected = mirror::affected(&all_events);
     mirror::refresh(pool, &affected).await?;
     tracing::info!(
-        agent = %agent_pubkey_bs58,
+        kind = entity_kind,
+        id = %entity_id_for_log,
         signatures = report.signatures_scanned,
         parsed = report.transactions_parsed,
         inserted = report.events_inserted,
@@ -310,13 +353,14 @@ fn decode_pubkey(bs58_str: &str) -> Result<[u8; 32], BackfillError> {
     Ok(out)
 }
 
-// AgentProfile layout: [discriminator(8)][authority(32)][owner(32)][...].
-// Owner sits at byte 40. Same constant used by the chain scan in the web client.
-fn owner_matches(account_data: &[u8], expected_owner: &[u8; 32]) -> bool {
-    if account_data.len() < 72 {
+/// Compares `expected_owner` to the 32 bytes at `offset` in `account_data`.
+/// Returns false (rather than panicking) if the buffer is too short.
+fn owner_matches_at(account_data: &[u8], expected_owner: &[u8; 32], offset: usize) -> bool {
+    let end = offset.saturating_add(32);
+    if account_data.len() < end {
         return false;
     }
-    &account_data[40..72] == expected_owner
+    &account_data[offset..end] == expected_owner
 }
 
 /// Off-chain port of Solana's `Pubkey::find_program_address`. Decrements the
@@ -373,23 +417,29 @@ mod tests {
     }
 
     #[test]
-    fn owner_matches_returns_true_for_aligned_owner() {
+    fn owner_matches_at_agent_offset() {
         let mut data = vec![0u8; 72];
-        data[40..72].copy_from_slice(&[7u8; 32]);
-        assert!(owner_matches(&data, &[7u8; 32]));
+        data[AGENT_OWNER_OFFSET..AGENT_OWNER_OFFSET + 32].copy_from_slice(&[7u8; 32]);
+        assert!(owner_matches_at(&data, &[7u8; 32], AGENT_OWNER_OFFSET));
+        assert!(!owner_matches_at(&data, &[9u8; 32], AGENT_OWNER_OFFSET));
     }
 
     #[test]
-    fn owner_matches_rejects_short_buffer() {
+    fn owner_matches_at_vault_offset() {
+        // CreditVault places owner immediately after the 8-byte discriminator.
+        let mut data = vec![0u8; 40];
+        data[VAULT_OWNER_OFFSET..VAULT_OWNER_OFFSET + 32].copy_from_slice(&[3u8; 32]);
+        assert!(owner_matches_at(&data, &[3u8; 32], VAULT_OWNER_OFFSET));
+        assert!(!owner_matches_at(&data, &[4u8; 32], VAULT_OWNER_OFFSET));
+    }
+
+    #[test]
+    fn owner_matches_at_rejects_short_buffer() {
         let data = vec![0u8; 39];
-        assert!(!owner_matches(&data, &[0u8; 32]));
-    }
-
-    #[test]
-    fn owner_matches_rejects_mismatch() {
-        let mut data = vec![0u8; 72];
-        data[40..72].copy_from_slice(&[1u8; 32]);
-        assert!(!owner_matches(&data, &[2u8; 32]));
+        assert!(!owner_matches_at(&data, &[0u8; 32], AGENT_OWNER_OFFSET));
+        // Also short for vault if the buffer doesn't span offset+32.
+        let too_small = vec![0u8; 30];
+        assert!(!owner_matches_at(&too_small, &[0u8; 32], VAULT_OWNER_OFFSET));
     }
 
     // Confirms the parser already understands a single-transaction

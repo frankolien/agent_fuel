@@ -55,6 +55,12 @@ export const api = {
     return request(`/api/agents/${pubkey}/backfill`, { method: "POST" });
   },
 
+  /** Same pattern as `backfillAgent` for vaults whose creation event the
+   *  indexer missed. */
+  backfillVault(pubkey: string): Promise<BackfillReport> {
+    return request(`/api/vaults/${pubkey}/backfill`, { method: "POST" });
+  },
+
   // ---- Vaults (owner-scoped) ----
   listVaults(): Promise<Vault[]> {
     return request("/api/vaults");

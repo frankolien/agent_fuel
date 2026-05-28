@@ -3,7 +3,7 @@ import { Pill } from "@/components/Pill/Pill";
 export function Cta() {
   return (
     <section className="mx-auto mt-[120px] mb-20 max-w-[var(--container-shell)] px-[var(--pad)]">
-      <div className="cta-card-bg relative overflow-hidden rounded-[28px] border border-[var(--color-line)] px-16 py-24 text-center">
+      <div className="cta-card-bg relative overflow-hidden rounded-[28px] border border-[var(--color-line)] px-6 py-12 text-center sm:px-10 sm:py-16 lg:px-16 lg:py-24">
         <div className="relative mx-auto max-w-[720px]">
           <div className="mb-[18px] inline-block font-mono text-[11.5px] tracking-[0.18em] text-mint-soft uppercase">
             Get started

@@ -48,13 +48,25 @@ export function VaultPolicy() {
       {vaultQuery.isLoading || !vaultQuery.data ? (
         <Skeleton className="h-[420px] w-full" />
       ) : (
-        <PolicyEditor vault={vaultQuery.data} services={servicesQuery.data ?? []} />
+        <PolicyEditor
+          vault={vaultQuery.data}
+          services={servicesQuery.data ?? []}
+          servicesLoading={servicesQuery.isLoading}
+        />
       )}
     </Screen>
   );
 }
 
-function PolicyEditor({ vault, services }: { vault: Vault; services: ReadonlyArray<Service> }) {
+function PolicyEditor({
+  vault,
+  services,
+  servicesLoading,
+}: {
+  vault: Vault;
+  services: ReadonlyArray<Service>;
+  servicesLoading: boolean;
+}) {
   const { connection } = useConnection();
   const wallet = useWallet();
   const qc = useQueryClient();
@@ -233,6 +245,7 @@ function PolicyEditor({ vault, services }: { vault: Vault; services: ReadonlyArr
           selected={whitelist}
           onToggle={toggleService}
           cap={WHITELIST_CAP}
+          loading={servicesLoading}
         />
       </Card>
 
@@ -378,12 +391,30 @@ function WhitelistGrid({
   selected,
   onToggle,
   cap,
+  loading,
 }: {
   services: ReadonlyArray<Service>;
   selected: string[];
   onToggle: (pubkey: string) => void;
   cap: number;
+  loading: boolean;
 }) {
+  // Distinguish "still fetching" (skeleton) from "fetched, none found"
+  // (CTA pointing at the Services screen). Previously both rendered the
+  // same "No services registered yet" copy, so the screen looked permanently
+  // empty for the half-second the query was in flight.
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-[58px] animate-pulse rounded-md border border-[var(--color-line)] bg-surface-2/60"
+          />
+        ))}
+      </div>
+    );
+  }
   if (services.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-white/[0.09] bg-surface/40 px-4 py-8 text-center text-[12.5px] text-muted">

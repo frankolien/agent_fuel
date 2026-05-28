@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { formatNumberCompact, formatUsdcCompact, shortPubkey } from "@/lib/format";
 import type { Agent } from "@/types/api";
-import { ScoreBadge, tierFor } from "./ScoreBadge";
+import { tierFor } from "@/lib/tier";
+import { ScoreBadge } from "./ScoreBadge";
 
 type AgentCardProps = {
   agent: Agent;

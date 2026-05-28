@@ -3,9 +3,10 @@ import { Link, useParams } from "react-router-dom";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { useQueryClient } from "@tanstack/react-query";
-import { useVaultActivityQuery, useVaultQuery } from "@/lib/api/hooks";
+import { useBackfillVault, useVaultActivityQuery, useVaultQuery } from "@/lib/api/hooks";
 import { queryKeys } from "@/lib/api/keys";
-import { useLiveAgent } from "@/lib/api/useLiveAgent";
+import { useLiveVault } from "@/lib/api/useLiveVault";
+import { toast } from "@/lib/toast";
 import { deposit, isMintAuthority, mintTestUsdc, setFrozen } from "@/lib/owner-actions";
 import { formatUsdc as formatUsdcWallet, useWalletBalances } from "@/lib/useWalletBalances";
 import {
@@ -30,7 +31,10 @@ export function VaultDetail() {
   const { pubkey = "" } = useParams<{ pubkey: string }>();
   const vaultQuery = useVaultQuery(pubkey);
   const activityQuery = useVaultActivityQuery(pubkey);
-  const live = useLiveAgent(vaultQuery.data?.agent);
+  // /ws/vaults/:pk — receives every event whose payload mentions this vault,
+  // including Deposited/Claimed/Frozen/PolicyUpdated which never carried an
+  // `agent` field and were silently dropped by /ws/agents/:pk.
+  const live = useLiveVault(pubkey);
 
   // Only show the not-found panel when we've truly never resolved the vault.
   // If we have cached data and the refetch later errors, prefer the stale data
@@ -256,10 +260,20 @@ function Identifiers({ vault }: { vault: Vault }) {
   );
 }
 
-function HeaderBadges({ vault, live }: { vault: Vault; live: ReturnType<typeof useLiveAgent> }) {
+function HeaderBadges({ vault, live }: { vault: Vault; live: ReturnType<typeof useLiveVault> }) {
+  const backfill = useBackfillVault(vault.pubkey);
   return (
     <div className="flex items-center gap-2">
       <LiveBadge status={live.status} />
+      <button
+        type="button"
+        onClick={() => backfill.mutate()}
+        disabled={backfill.isPending}
+        title="Replay this vault's on-chain history through the indexer. Safe to run anytime — it's idempotent."
+        className="inline-flex h-8 items-center rounded-md border border-white/[0.16] bg-surface-2 px-3 font-mono text-[11.5px] text-fg-2 hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {backfill.isPending ? "Backfilling…" : "Backfill ↻"}
+      </button>
       {vault.frozen ? (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E0857714] px-3 py-1 font-mono text-[11.5px] tracking-[0.06em] text-[#E08577] uppercase">
           <span className="h-1.5 w-1.5 rounded-full bg-[#E08577]" />
@@ -311,13 +325,11 @@ function OwnerActions({ vault }: { vault: Vault }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState<null | "deposit" | "policy">(null);
   const [freezing, setFreezing] = useState(false);
-  const [freezeError, setFreezeError] = useState<string | null>(null);
 
   const isOwner = publicKey?.toBase58() === vault.owner;
 
   const onToggleFreeze = async () => {
     if (!publicKey || !signTransaction) return;
-    setFreezeError(null);
     setFreezing(true);
     try {
       await setFrozen({
@@ -328,8 +340,9 @@ function OwnerActions({ vault }: { vault: Vault }) {
         frozen: !vault.frozen,
       });
       await qc.invalidateQueries({ queryKey: queryKeys.vault(vault.pubkey) });
+      toast.success(vault.frozen ? "Vault unfrozen" : "Vault frozen");
     } catch (err) {
-      setFreezeError(err instanceof Error ? err.message : String(err));
+      toast.fromError(err, vault.frozen ? "Unfreeze failed" : "Freeze failed");
     } finally {
       setFreezing(false);
     }
@@ -379,12 +392,6 @@ function OwnerActions({ vault }: { vault: Vault }) {
           {freezing ? "…" : vault.frozen ? "Unfreeze" : "Freeze"}
         </button>
       </div>
-      {freezeError && (
-        <div className="mt-2 rounded-md border border-[#E0857733] bg-[#E0857714] px-3 py-1.5 font-mono text-[11px] text-[#E08577]">
-          {freezeError}
-        </div>
-      )}
-
       {open === "deposit" && (
         <DepositModal vault={vault} onClose={() => setOpen(null)} />
       )}

@@ -24,7 +24,14 @@ const PER_AGENT_LIMIT = 25;
 
 export function useFleetActivity(): FleetActivity {
   const agentsQuery = useAgentsQuery();
-  const agents = Array.isArray(agentsQuery.data) ? agentsQuery.data : [];
+  // `useAgentsQuery` can return undefined or (after a coerce path) a fresh
+  // array each render — wrap in useMemo so the downstream useMemo deps
+  // don't re-fire on every parent render.
+  const agentsData = agentsQuery.data;
+  const agents = useMemo(
+    () => (Array.isArray(agentsData) ? agentsData : []),
+    [agentsData],
+  );
   const live = useFleetTicker();
 
   // The merged agents list (useAgentsQuery) can include chain-discovered

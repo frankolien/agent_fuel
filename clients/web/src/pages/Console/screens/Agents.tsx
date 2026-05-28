@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAgentsQuery } from "@/lib/api/hooks";
+import { errorMessage } from "@/lib/error";
 import { formatNumber, formatNumberCompact, formatUsdcCompact, shortPubkey } from "@/lib/format";
 import type { Agent } from "@/types/api";
 import { Screen } from "./Screen";
-import { ScoreBadge, tierFor } from "../components/ScoreBadge";
+import { tierFor } from "@/lib/tier";
+import { ScoreBadge } from "../components/ScoreBadge";
 import { SkeletonRows } from "../components/Skeleton";
 
 export function Agents() {
@@ -24,7 +26,7 @@ export function Agents() {
       }
     >
       {isLoading ? <SkeletonRows rows={6} height={56} /> : null}
-      {error ? <ErrorState message={(error as Error).message} /> : null}
+      {error ? <ErrorState message={errorMessage(error)} /> : null}
       {data ? <AgentsTable agents={data} /> : null}
     </Screen>
   );

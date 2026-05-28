@@ -62,11 +62,17 @@ impl WsHub {
         remaining
     }
 
+    /// Fans each event out to every entity-scoped channel it mentions.
+    ///
+    /// Channel keys are namespaced (`agent:{pk}`, `vault:{pk}`, `service:{pk}`)
+    /// so subscribers on `/ws/agents/{pk}` only receive events that mention
+    /// that agent — not anyone else's. The previous implementation broadcast
+    /// only on `payload.agent` which silently dropped vault- and service-only
+    /// events (Deposited, Claimed, Frozen, PolicyUpdated, ServiceRegistered,
+    /// ServiceActiveSet, etc.) — the screens listening for them never saw
+    /// anything.
     pub fn broadcast_events(&self, events: &[ParsedEvent]) {
         for ev in events {
-            let Some(agent) = ev.decoded.payload["agent"].as_str() else {
-                continue;
-            };
             let frame = serde_json::json!({
                 "type": "event",
                 "signature": ev.signature,
@@ -79,14 +85,51 @@ impl WsHub {
             let Ok(text) = serde_json::to_string(&frame) else {
                 continue;
             };
-            self.broadcast(agent, &text);
+            for key in event_channels(&ev.decoded.payload) {
+                self.broadcast(&key, &text);
+            }
         }
     }
+}
+
+/// Returns every channel an event payload should be broadcast on. An event
+/// like `Spent` carries `agent`, `vault`, and `service` — subscribers on any
+/// of those three channels see the same frame.
+fn event_channels(payload: &serde_json::Value) -> Vec<String> {
+    const ENTITY_FIELDS: &[(&str, &str)] = &[
+        ("agent", "agent"),
+        ("vault", "vault"),
+        ("service", "service"),
+    ];
+    ENTITY_FIELDS
+        .iter()
+        .filter_map(|(field, kind)| {
+            payload[*field]
+                .as_str()
+                .map(|pk| format!("{kind}:{pk}"))
+        })
+        .collect()
+}
+
+/// Channel-key helpers used by the WS route handlers — keep keys in one
+/// place so the subscribe path and the broadcast path can't drift.
+pub fn agent_key(pubkey: &str) -> String {
+    format!("agent:{pubkey}")
+}
+
+pub fn vault_key(pubkey: &str) -> String {
+    format!("vault:{pubkey}")
+}
+
+#[allow(dead_code)] // wired into the service-channel route in a follow-up
+pub fn service_key(pubkey: &str) -> String {
+    format!("service:{pubkey}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[tokio::test]
     async fn subscribe_then_broadcast_delivers() {
@@ -97,7 +140,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn broadcast_to_unknown_agent_is_a_noop() {
+    async fn broadcast_to_unknown_key_is_a_noop() {
         let hub = WsHub::default();
         assert_eq!(hub.broadcast("nobody", "x"), 0);
     }
@@ -110,7 +153,7 @@ mod tests {
         // First broadcast detects the dead sender via `send` returning Err,
         // then `retain` removes it. Result: 0 live subscribers.
         assert_eq!(hub.broadcast("A", "msg"), 0);
-        // Second broadcast confirms the agent key has been cleaned up too.
+        // Second broadcast confirms the key has been cleaned up too.
         assert_eq!(hub.broadcast("A", "again"), 0);
     }
 
@@ -125,7 +168,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn other_agents_dont_receive() {
+    async fn other_keys_dont_receive() {
         let hub = WsHub::default();
         let mut rx = hub.subscribe("A");
         hub.broadcast("B", "for B");
@@ -144,7 +187,49 @@ mod tests {
         }
         // Channel is now full. The next broadcast's try_send fails → subscriber dropped.
         assert_eq!(hub.broadcast("A", "overflow"), 0);
-        // Subsequent broadcasts are no-ops; the agent key is also cleaned up.
+        // Subsequent broadcasts are no-ops; the key is also cleaned up.
         assert_eq!(hub.broadcast("A", "again"), 0);
+    }
+
+    #[test]
+    fn event_channels_collects_every_entity_in_payload() {
+        // A Spent event carries agent + vault + service simultaneously.
+        let p = json!({ "agent": "A", "vault": "V", "service": "S", "amount_usdc": 1 });
+        let keys = event_channels(&p);
+        assert!(keys.iter().any(|k| k == "agent:A"));
+        assert!(keys.iter().any(|k| k == "vault:V"));
+        assert!(keys.iter().any(|k| k == "service:S"));
+    }
+
+    #[test]
+    fn event_channels_handles_vault_only_payload() {
+        // Regression for the bug where vault-only events (Deposited, Claimed,
+        // VaultFrozen, PolicyUpdated, Withdrawn, Unfrozen) silently dropped
+        // because the old broadcaster only looked at `payload.agent`.
+        let p = json!({ "vault": "V", "amount_usdc": 1 });
+        let keys = event_channels(&p);
+        assert_eq!(keys, vec!["vault:V"]);
+    }
+
+    #[test]
+    fn event_channels_handles_service_only_payload() {
+        let p = json!({ "service": "S", "active": false });
+        let keys = event_channels(&p);
+        assert_eq!(keys, vec!["service:S"]);
+    }
+
+    #[test]
+    fn event_channels_returns_empty_for_payload_without_entities() {
+        // Defensive: a payload missing every known entity field should yield
+        // zero broadcasts rather than panic.
+        let p = json!({ "amount_usdc": 1 });
+        assert!(event_channels(&p).is_empty());
+    }
+
+    #[test]
+    fn keys_use_their_namespace_prefixes() {
+        assert_eq!(agent_key("abc"), "agent:abc");
+        assert_eq!(vault_key("abc"), "vault:abc");
+        assert_eq!(service_key("abc"), "service:abc");
     }
 }

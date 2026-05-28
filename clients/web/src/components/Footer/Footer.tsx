@@ -27,7 +27,7 @@ const GROUPS: ReadonlyArray<Group> = [
   {
     heading: "Community",
     links: [
-      { label: "GitHub", href: "https://github.com" },
+      { label: "GitHub", href: "https://github.com/frankolien/agent_fuel" },
       { label: "Discord", href: "#" },
       { label: "X / Twitter", href: "#" },
       { label: "Brand kit", href: "#" },

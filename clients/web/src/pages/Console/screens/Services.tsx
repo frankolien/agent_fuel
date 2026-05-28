@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useServicesQuery } from "@/lib/api/hooks";
+import { errorMessage } from "@/lib/error";
+import { toast } from "@/lib/toast";
 import { formatNumberCompact, formatUsdcCompact, shortPubkey } from "@/lib/format";
 import type { Service } from "@/types/api";
 import { RegisterServiceModal } from "../components/RegisterServiceModal";
@@ -55,7 +57,7 @@ export function Services() {
       }
     >
       {isLoading ? <SkeletonRows rows={6} height={56} /> : null}
-      {error ? <ErrorState message={(error as Error).message} /> : null}
+      {error ? <ErrorState message={errorMessage(error)} /> : null}
       {data ? (
         <ServicesTable
           services={data}
@@ -198,8 +200,11 @@ function CopyAddress({ address }: { address: string }) {
       await navigator.clipboard.writeText(address);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
-    } catch {
-      // ignore
+    } catch (err) {
+      // Clipboard can be denied (insecure context, permission), and silently
+      // failing here is exactly the "weird empty feedback" the user complained
+      // about. Surface it as a toast so the user can fall back to manual copy.
+      toast.fromError(err, "Couldn't copy to clipboard");
     }
   };
   return (

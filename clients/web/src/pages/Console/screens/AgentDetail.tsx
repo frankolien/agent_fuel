@@ -30,7 +30,8 @@ import { AddressPill } from "../components/AddressPill";
 import { Card } from "../components/Card";
 import { LiveBadge } from "../components/LiveBadge";
 import { Kpi, KpiStrip } from "../components/Kpi";
-import { ScoreBadge, tierFor } from "../components/ScoreBadge";
+import { tierFor } from "@/lib/tier";
+import { ScoreBadge } from "../components/ScoreBadge";
 import { Skeleton, SkeletonRows } from "../components/Skeleton";
 import { Sparkline } from "../components/Sparkline";
 

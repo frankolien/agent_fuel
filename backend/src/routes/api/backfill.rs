@@ -15,28 +15,51 @@ pub async fn agent(
     path: web::Path<String>,
 ) -> impl Responder {
     let agent_pubkey = path.into_inner();
-
     let Some(rpc) = state.rpc_client.as_ref() else {
-        // Unconfigured RPC means we'd otherwise misreport "agent doesn't exist
-        // on chain" — fail loudly so the operator notices.
-        return HttpResponse::ServiceUnavailable().body(
-            "backfill unavailable: SOLANA_RPC_URL not configured",
-        );
+        return rpc_unavailable();
     };
+    let report =
+        backfill::backfill_agent(&state.pool, rpc.as_ref(), &agent_pubkey, &caller.0).await;
+    map_report("agent", &agent_pubkey, report)
+}
 
-    let report = backfill::backfill_agent(&state.pool, rpc.as_ref(), &agent_pubkey, &caller.0).await;
+#[post("/api/vaults/{pubkey}/backfill")]
+pub async fn vault(
+    state: web::Data<AppState>,
+    caller: AuthedPubkey,
+    path: web::Path<String>,
+) -> impl Responder {
+    let vault_pubkey = path.into_inner();
+    let Some(rpc) = state.rpc_client.as_ref() else {
+        return rpc_unavailable();
+    };
+    let report =
+        backfill::backfill_vault(&state.pool, rpc.as_ref(), &vault_pubkey, &caller.0).await;
+    map_report("vault", &vault_pubkey, report)
+}
+
+fn rpc_unavailable() -> HttpResponse {
+    // Unconfigured RPC means we'd otherwise misreport "doesn't exist on chain"
+    // for accounts we just can't see — fail loudly so the operator notices.
+    HttpResponse::ServiceUnavailable().body("backfill unavailable: SOLANA_RPC_URL not configured")
+}
+
+fn map_report(
+    kind: &'static str,
+    pubkey: &str,
+    report: Result<backfill::BackfillReport, BackfillError>,
+) -> HttpResponse {
     match report {
         Ok(r) => HttpResponse::Ok().json(r),
-        // 404 covers both "no on-chain account" and (separately) "agent doesn't
-        // exist" — the caller already proved knowledge of the pubkey, so this
-        // doesn't leak ownership info.
+        // The caller already proved knowledge of the pubkey, so 404 here doesn't
+        // leak ownership info beyond what `/reputation/{pk}` already exposes.
         Err(BackfillError::AgentNotFound) => HttpResponse::NotFound().finish(),
-        // Distinguish ownership rejection so the UI can tell the user they
-        // need to switch wallets.
-        Err(BackfillError::OwnerMismatch) => HttpResponse::Forbidden().body("not the agent owner"),
+        Err(BackfillError::OwnerMismatch) => {
+            HttpResponse::Forbidden().body(format!("not the {kind} owner"))
+        }
         Err(BackfillError::InvalidPubkey(_)) => HttpResponse::BadRequest().body("invalid pubkey"),
         Err(err) => {
-            tracing::error!(%agent_pubkey, error = %err, "backfill failed");
+            tracing::error!(kind, %pubkey, error = %err, "backfill failed");
             HttpResponse::InternalServerError().finish()
         }
     }
