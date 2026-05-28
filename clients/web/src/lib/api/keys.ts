@@ -7,6 +7,7 @@ export const queryKeys = {
   agent: (pubkey: string) => ["agents", pubkey] as const,
   agentActivity: (pubkey: string) => ["agents", pubkey, "activity"] as const,
   agentScoreHistory: (pubkey: string) => ["agents", pubkey, "score-history"] as const,
+  agentVaults: (pubkey: string) => ["agents", pubkey, "vaults"] as const,
 
   vaults: () => ["vaults"] as const,
   vault: (pubkey: string) => ["vaults", pubkey] as const,

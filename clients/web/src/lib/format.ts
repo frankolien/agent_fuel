@@ -53,8 +53,9 @@ export function formatNumberCompact(n: number): string {
   return intCompactFmt.format(n);
 }
 
-/** Drops the middle of a long pubkey: "AtL5…m7Wm". */
-export function shortPubkey(pubkey: string, edge = 4): string {
+/** Drops the middle of a long pubkey: "AtL5…m7Wm". Empty/missing → em-dash. */
+export function shortPubkey(pubkey: string | null | undefined, edge = 4): string {
+  if (!pubkey) return "—";
   if (pubkey.length <= edge * 2 + 1) return pubkey;
   return `${pubkey.slice(0, edge)}…${pubkey.slice(-edge)}`;
 }

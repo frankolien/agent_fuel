@@ -1,6 +1,12 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
+import { useQueryClient } from "@tanstack/react-query";
 import { useVaultsQuery } from "@/lib/api/hooks";
+import { queryKeys } from "@/lib/api/keys";
+import { createVault } from "@/lib/owner-actions";
+import { AgentModeSelector, type AgentChoice } from "../components/AgentMode";
 import {
   formatUsdc,
   formatUsdcCompact,
@@ -12,8 +18,14 @@ import { Screen } from "./Screen";
 import { Gauge } from "../components/Gauge";
 import { SkeletonRows } from "../components/Skeleton";
 
+// Devnet test-USDC mint deployed by `npm run devnet:bootstrap`. Users can
+// paste their own mint in the form — this is just the default for the demo.
+const DEFAULT_DEVNET_USDC_MINT = "GxAHHLN4qZtiHXKiTNFebXbbMWzgFBy4AGaiDJEY8xdf";
+
 export function Vaults() {
   const { data, isLoading, error } = useVaultsQuery();
+  const { publicKey } = useWallet();
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <Screen
@@ -21,17 +33,268 @@ export function Vaults() {
       title="Vaults"
       subtitle="USDC-funded credit vaults and policies."
       actions={
-        data ? (
-          <span className="font-mono text-[11.5px] tracking-[0.06em] text-muted uppercase">
-            {data.length} total
-          </span>
-        ) : null
+        <div className="flex items-center gap-3">
+          {data ? (
+            <span className="font-mono text-[11.5px] tracking-[0.06em] text-muted uppercase">
+              {data.length} total
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            disabled={!publicKey}
+            className="rounded-full bg-mint px-4 py-1.5 text-[12.5px] font-semibold text-bg transition hover:bg-mint-soft disabled:cursor-not-allowed disabled:opacity-40"
+            title={publicKey ? "Create a new credit vault" : "Connect a wallet to create a vault"}
+          >
+            + New vault
+          </button>
+        </div>
       }
     >
       {isLoading ? <SkeletonRows rows={6} height={68} /> : null}
       {error ? <ErrorState message={(error as Error).message} /> : null}
       {data ? <VaultsTable vaults={data} /> : null}
+      {createOpen && <CreateVaultModal onClose={() => setCreateOpen(false)} />}
     </Screen>
+  );
+}
+
+function CreateVaultModal({ onClose }: { onClose: () => void }) {
+  const { connection } = useConnection();
+  const wallet = useWallet();
+  const qc = useQueryClient();
+  const [agentChoice, setAgentChoice] = useState<AgentChoice>({ mode: "wallet" });
+  const [mint, setMint] = useState(DEFAULT_DEVNET_USDC_MINT);
+  const [perTx, setPerTx] = useState("1");
+  const [hourly, setHourly] = useState("5");
+  const [lifetime, setLifetime] = useState("100");
+  const [allowPostPay, setAllowPostPay] = useState(false);
+  const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [vaultPubkey, setVaultPubkey] = useState<string | null>(null);
+  const [createdAgent, setCreatedAgent] = useState<string | null>(null);
+
+  const submitDisabled =
+    status === "submitting" ||
+    (agentChoice.mode === "generate" && !agentChoice.downloaded);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wallet.publicKey || !wallet.signTransaction) {
+      setError("Wallet not connected");
+      return;
+    }
+    const toMicro = (s: string, label: string) => {
+      const n = Number(s);
+      if (!Number.isFinite(n) || n < 0) throw new Error(`${label} must be a non-negative number`);
+      return Math.round(n * 1_000_000);
+    };
+    setError(null);
+    setStatus("submitting");
+    try {
+      const mintPk = new PublicKey(mint); // throws on invalid base58
+      const { signature: sig, vault } = await createVault({
+        connection,
+        wallet: { publicKey: wallet.publicKey, signTransaction: wallet.signTransaction },
+        ...(agentChoice.mode === "generate" ? { agentKeypair: agentChoice.keypair } : {}),
+        mint: mintPk,
+        perTxUsdcMicro: toMicro(perTx, "Per-tx"),
+        hourlyUsdcMicro: toMicro(hourly, "Hourly"),
+        lifetimeUsdcMicro: toMicro(lifetime, "Lifetime"),
+        allowPostPay,
+      });
+      setSignature(sig);
+      setVaultPubkey(vault.toBase58());
+      setCreatedAgent(
+        (agentChoice.mode === "generate"
+          ? agentChoice.keypair.publicKey
+          : wallet.publicKey
+        ).toBase58(),
+      );
+      setStatus("done");
+      await qc.invalidateQueries({ queryKey: queryKeys.vaults() });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("idle");
+    }
+  };
+
+  return (
+    <Modal title="Create vault" onClose={onClose}>
+      {status === "done" ? (
+        <div className="grid gap-4">
+          <p className="m-0 text-[14px] text-fg-2">
+            Vault created. If you generated a new agent keypair, you'll need its secret in your
+            bot's config to sign spends.
+          </p>
+          <div className="grid gap-1.5">
+            <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">
+              Vault
+            </span>
+            <Link
+              to={`/console/vaults/${vaultPubkey}`}
+              className="block truncate font-mono text-[12px] text-mint hover:underline"
+              onClick={onClose}
+            >
+              {vaultPubkey}
+            </Link>
+          </div>
+          {createdAgent && createdAgent !== wallet.publicKey?.toBase58() ? (
+            <div className="grid gap-1.5">
+              <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">
+                Agent
+              </span>
+              <span className="block truncate font-mono text-[12px] text-mint-soft">
+                {createdAgent}
+              </span>
+            </div>
+          ) : null}
+          <a
+            href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block truncate font-mono text-[11.5px] text-muted hover:text-fg"
+          >
+            tx {signature}
+          </a>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full bg-mint px-4 py-2 text-[12.5px] font-semibold text-bg hover:bg-mint-soft"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <AgentModeSelector
+            ownerPubkey={wallet.publicKey ?? null}
+            onChange={setAgentChoice}
+          />
+          <Field label="USDC mint">
+            <input
+              type="text"
+              value={mint}
+              onChange={(e) => setMint(e.target.value)}
+              spellCheck={false}
+              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[12px] text-fg outline-none focus:border-mint-soft"
+            />
+            <span className="mt-1 font-mono text-[10.5px] text-muted">
+              Devnet test mint pre-filled — paste your own to use a different one.
+            </span>
+          </Field>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Per-tx (USDC)">
+              <CapInput value={perTx} onChange={setPerTx} />
+            </Field>
+            <Field label="Hourly (USDC)">
+              <CapInput value={hourly} onChange={setHourly} />
+            </Field>
+            <Field label="Lifetime (USDC)">
+              <CapInput value={lifetime} onChange={setLifetime} />
+            </Field>
+          </div>
+          <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-fg-2">
+            <input
+              type="checkbox"
+              checked={allowPostPay}
+              onChange={(e) => setAllowPostPay(e.target.checked)}
+              className="h-4 w-4 accent-mint"
+            />
+            Allow post-pay
+            <span className="font-mono text-[10.5px] text-muted">
+              (advanced — leaves overdraft enabled for the agent)
+            </span>
+          </label>
+          <p className="m-0 text-[12px] text-muted">
+            Owner is your connected wallet (
+            <span className="font-mono">{wallet.publicKey ? shortPubkey(wallet.publicKey.toBase58()) : "—"}</span>
+            ). Owner pays the rent (~0.005 SOL).
+          </p>
+          {error && (
+            <div className="rounded-md border border-[#E0857733] bg-[#E0857714] px-3 py-2 text-[12px] text-[#E08577]">
+              {error}
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-[var(--color-line)] px-4 py-2 text-[12.5px] text-fg-2 hover:bg-surface-2"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitDisabled}
+              title={
+                agentChoice.mode === "generate" && !agentChoice.downloaded
+                  ? "Download the agent keypair JSON first"
+                  : undefined
+              }
+              className="rounded-full bg-mint px-4 py-2 text-[12.5px] font-semibold text-bg hover:bg-mint-soft disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {status === "submitting" ? "Submitting…" : "Create vault"}
+            </button>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+function CapInput({ value, onChange }: { value: string; onChange: (s: string) => void }) {
+  return (
+    <input
+      type="number"
+      min="0"
+      step="0.01"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
+    />
+  );
+}
+
+function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[480px] rounded-[16px] border border-[var(--color-line-2)] bg-surface p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="m-0 text-[16px] font-semibold tracking-[-0.005em]">{title}</h3>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-muted hover:text-fg">
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">{label}</span>
+      {children}
+    </label>
   );
 }
 

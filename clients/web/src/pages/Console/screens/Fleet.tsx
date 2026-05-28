@@ -1,6 +1,16 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Agent, EventRow, LiveEventFrame } from "@/types/api";
 import { useAgentsQuery } from "@/lib/api/hooks";
+import { queryKeys } from "@/lib/api/keys";
+import {
+  AgentAlreadyInitializedError,
+  initializeAgent,
+  registerService,
+  type ServiceCategory,
+} from "@/lib/owner-actions";
+import { AgentModeSelector, type AgentChoice } from "../components/AgentMode";
 import { formatNumberCompact, formatUsdcCompact } from "@/lib/format";
 import { Screen } from "./Screen";
 import { ActivityRow } from "../components/ActivityRow";
@@ -14,13 +24,35 @@ import { useFleetTicker } from "../useFleetTicker";
 export function Fleet() {
   const agentsQuery = useAgentsQuery();
   const frames = useFleetTicker();
+  const { publicKey } = useWallet();
+  const [openModal, setOpenModal] = useState<null | "agent" | "service">(null);
 
   return (
     <Screen
       eyebrow="Overview"
       title="Fleet"
       subtitle="KPIs, live activity, and the agents you operate."
-      actions={<LiveBadge status={agentsQuery.isLoading ? "connecting" : "open"} />}
+      actions={
+        <div className="flex items-center gap-2.5">
+          <LiveBadge status={agentsQuery.isLoading ? "connecting" : "open"} />
+          <button
+            type="button"
+            onClick={() => setOpenModal("service")}
+            disabled={!publicKey}
+            className="rounded-full border border-[var(--color-line-2)] px-4 py-1.5 text-[12.5px] font-medium text-fg-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            + Register service
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpenModal("agent")}
+            disabled={!publicKey}
+            className="rounded-full bg-mint px-4 py-1.5 text-[12.5px] font-semibold text-bg transition hover:bg-mint-soft disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            + Initialize agent
+          </button>
+        </div>
+      }
     >
       {agentsQuery.isLoading ? <KpiSkeleton /> : null}
       {agentsQuery.data ? <FleetKpis agents={agentsQuery.data} /> : null}
@@ -39,7 +71,7 @@ export function Fleet() {
               ))}
             </div>
           ) : (
-            <EmptyState note="No agents yet. Initialize one with the SDK to get started." />
+            <EmptyState note='No agents yet. Click "+ Initialize agent" above to create one.' />
           )}
         </Card>
 
@@ -53,6 +85,9 @@ export function Fleet() {
           )}
         </Card>
       </div>
+
+      {openModal === "agent" && <InitializeAgentModal onClose={() => setOpenModal(null)} />}
+      {openModal === "service" && <RegisterServiceModal onClose={() => setOpenModal(null)} />}
     </Screen>
   );
 }
@@ -169,6 +204,330 @@ function EmptyState({ note }: { note: string }) {
   return (
     <div className="grid place-items-center rounded-[10px] border border-dashed border-white/[0.09] bg-surface/40 px-6 py-20 text-center text-[13px] text-muted">
       {note}
+    </div>
+  );
+}
+
+// ---------- Initialize agent ----------
+
+function InitializeAgentModal({ onClose }: { onClose: () => void }) {
+  const { connection } = useConnection();
+  const wallet = useWallet();
+  const qc = useQueryClient();
+  const [agentChoice, setAgentChoice] = useState<AgentChoice>({ mode: "wallet" });
+  const [uri, setUri] = useState("");
+  const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [createdAgent, setCreatedAgent] = useState<string | null>(null);
+
+  // The URI default tracks the chosen agent pubkey so users see a sensible
+  // default but can override.
+  const effectiveAgentPk =
+    agentChoice.mode === "generate"
+      ? agentChoice.keypair.publicKey
+      : wallet.publicKey ?? null;
+  const uriPlaceholder = effectiveAgentPk
+    ? `https://agentfuel.online/agents/${effectiveAgentPk.toBase58()}`
+    : "";
+
+  const submitDisabled =
+    status === "submitting" ||
+    (agentChoice.mode === "generate" && !agentChoice.downloaded);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wallet.publicKey || !wallet.signTransaction) {
+      setError("Wallet not connected");
+      return;
+    }
+    setError(null);
+    setStatus("submitting");
+    try {
+      const trimmedUri = uri.trim();
+      const sig = await initializeAgent({
+        connection,
+        wallet: { publicKey: wallet.publicKey, signTransaction: wallet.signTransaction },
+        ...(agentChoice.mode === "generate" ? { agentKeypair: agentChoice.keypair } : {}),
+        ...(trimmedUri ? { agentUri: trimmedUri } : {}),
+      });
+      setSignature(sig);
+      setCreatedAgent(
+        (agentChoice.mode === "generate"
+          ? agentChoice.keypair.publicKey
+          : wallet.publicKey
+        ).toBase58(),
+      );
+      setStatus("done");
+      await qc.invalidateQueries({ queryKey: queryKeys.agents() });
+    } catch (err) {
+      if (err instanceof AgentAlreadyInitializedError) {
+        setError("This agent already has a reputation profile.");
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+      setStatus("idle");
+    }
+  };
+
+  return (
+    <Modal title="Initialize agent" onClose={onClose}>
+      {status === "done" ? (
+        <DoneState
+          signature={signature ?? ""}
+          message={`Reputation profile created for ${createdAgent?.slice(0, 4)}…${createdAgent?.slice(-4)}.`}
+          onClose={onClose}
+        />
+      ) : (
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <AgentModeSelector
+            ownerPubkey={wallet.publicKey ?? null}
+            onChange={setAgentChoice}
+          />
+          <Field label="Profile URI (optional)">
+            <input
+              type="text"
+              value={uri}
+              onChange={(e) => setUri(e.target.value)}
+              placeholder={uriPlaceholder}
+              spellCheck={false}
+              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[12px] text-fg outline-none focus:border-mint-soft"
+            />
+            <span className="mt-1 font-mono text-[10.5px] text-muted">
+              128 bytes max · leave blank for default
+            </span>
+          </Field>
+          {error && <ErrorLine text={error} />}
+          <ModalFooter
+            submitLabel={status === "submitting" ? "Submitting…" : "Initialize"}
+            submitting={submitDisabled}
+            onClose={onClose}
+          />
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+// ---------- Register service ----------
+
+const CATEGORIES: ReadonlyArray<ServiceCategory> = ["DataFeed", "Compute", "Swap", "Rpc", "Other"];
+
+function RegisterServiceModal({ onClose }: { onClose: () => void }) {
+  const { connection } = useConnection();
+  const wallet = useWallet();
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<ServiceCategory>("Other");
+  const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [registry, setRegistry] = useState<string | null>(null);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wallet.publicKey || !wallet.signTransaction) {
+      setError("Wallet not connected");
+      return;
+    }
+    if (!name.trim()) {
+      setError("Name is required");
+      return;
+    }
+    setError(null);
+    setStatus("submitting");
+    try {
+      const { signature: sig, registry: pda } = await registerService({
+        connection,
+        wallet: { publicKey: wallet.publicKey, signTransaction: wallet.signTransaction },
+        name: name.trim(),
+        category,
+      });
+      setSignature(sig);
+      setRegistry(pda.toBase58());
+      setStatus("done");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("idle");
+    }
+  };
+
+  return (
+    <Modal title="Register service" onClose={onClose}>
+      {status === "done" ? (
+        <DoneState
+          signature={signature ?? ""}
+          message={`Service registered at ${registry?.slice(0, 4)}…${registry?.slice(-4)}.`}
+          onClose={onClose}
+        />
+      ) : (
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <Field label="Service name">
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={32}
+              placeholder="e.g. helix-rpc"
+              autoFocus
+              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
+            />
+            <span className="mt-1 font-mono text-[10.5px] text-muted">32 bytes max</span>
+          </Field>
+          <Field label="Category">
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCategory(c)}
+                  className={`rounded-full border px-3 py-1 font-mono text-[11.5px] transition ${
+                    category === c
+                      ? "border-mint bg-mint/15 text-mint"
+                      : "border-[var(--color-line-2)] text-fg-2 hover:bg-surface-2"
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <p className="m-0 text-[12px] text-muted">
+            Registers your connected wallet as the service authority. Agents check this registry
+            to know which services accept x402 payments.
+          </p>
+          {error && <ErrorLine text={error} />}
+          <ModalFooter
+            submitLabel={status === "submitting" ? "Submitting…" : "Register"}
+            submitting={status === "submitting"}
+            onClose={onClose}
+          />
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+// ---------- Shared modal primitives ----------
+
+function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  // Lock body scroll while open + close on Escape.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[440px] rounded-[16px] border border-[var(--color-line-2)] bg-surface p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="m-0 text-[16px] font-semibold tracking-[-0.005em]">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-muted hover:text-fg"
+          >
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function ModalFooter({
+  submitLabel,
+  submitting,
+  onClose,
+}: {
+  submitLabel: string;
+  submitting: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="mt-2 flex items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={onClose}
+        className="rounded-full border border-[var(--color-line)] px-4 py-2 text-[12.5px] text-fg-2 hover:bg-surface-2"
+      >
+        Cancel
+      </button>
+      <button
+        type="submit"
+        disabled={submitting}
+        className="rounded-full bg-mint px-4 py-2 text-[12.5px] font-semibold text-bg hover:bg-mint-soft disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {submitLabel}
+      </button>
+    </div>
+  );
+}
+
+function ErrorLine({ text }: { text: string }) {
+  return (
+    <div className="rounded-md border border-[#E0857733] bg-[#E0857714] px-3 py-2 text-[12px] text-[#E08577]">
+      {text}
+    </div>
+  );
+}
+
+function DoneState({
+  signature,
+  message,
+  onClose,
+}: {
+  signature: string;
+  message: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <p className="m-0 text-[14px] text-fg-2">{message}</p>
+      <a
+        href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block truncate font-mono text-[11.5px] text-mint hover:underline"
+      >
+        {signature}
+      </a>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full bg-mint px-4 py-2 text-[12.5px] font-semibold text-bg hover:bg-mint-soft"
+        >
+          Done
+        </button>
+      </div>
     </div>
   );
 }

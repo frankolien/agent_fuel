@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useAuth } from "@/app/auth";
+import { formatSol, formatUsdc, useWalletBalances } from "@/lib/useWalletBalances";
 import { CaretDownIcon, InboxIcon, SearchIcon, SettingsIcon } from "./icons";
 import { Ticker } from "./components/Ticker";
 import { useFleetTicker } from "./useFleetTicker";
+
+// Devnet test-USDC mint. Same constant the Vaults screen uses for the create
+// flow. Lives here so the topbar can show the user's test-USDC balance even
+// when they haven't opened any vault yet.
+const DEFAULT_DEVNET_USDC_MINT = "GxAHHLN4qZtiHXKiTNFebXbbMWzgFBy4AGaiDJEY8xdf";
 
 export function Topbar() {
   const ticker = useFleetTicker();
@@ -40,9 +46,32 @@ export function Topbar() {
         >
           <SettingsIcon />
         </button>
+        <BalancesPill />
         <WalletMenu />
       </div>
     </header>
+  );
+}
+
+function BalancesPill() {
+  const { data, isLoading } = useWalletBalances(DEFAULT_DEVNET_USDC_MINT);
+  if (isLoading && !data) {
+    return (
+      <div className="flex h-8 items-center rounded-md border border-white/[0.09] bg-surface-2 px-2.5 font-mono text-[11px] text-muted">
+        …
+      </div>
+    );
+  }
+  if (!data) return null;
+  return (
+    <div
+      title="Your wallet's devnet balances"
+      className="flex h-8 items-center gap-2 rounded-md border border-white/[0.09] bg-surface-2 px-2.5 font-mono text-[11px]"
+    >
+      <span className="text-mint">{formatUsdc(data.usdcMicro)} USDC</span>
+      <span className="text-muted-2">·</span>
+      <span className="text-fg-2">{formatSol(data.solLamports, 3)} SOL</span>
+    </div>
   );
 }
 

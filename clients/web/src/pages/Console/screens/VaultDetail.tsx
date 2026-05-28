@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
@@ -6,7 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useVaultActivityQuery, useVaultQuery } from "@/lib/api/hooks";
 import { queryKeys } from "@/lib/api/keys";
 import { useLiveAgent } from "@/lib/api/useLiveAgent";
-import { deposit, setFrozen, updatePolicy } from "@/lib/owner-actions";
+import { deposit, isMintAuthority, mintTestUsdc, setFrozen } from "@/lib/owner-actions";
+import { formatUsdc as formatUsdcWallet, useWalletBalances } from "@/lib/useWalletBalances";
 import {
   formatDate,
   formatNumberCompact,
@@ -346,15 +347,18 @@ function OwnerActions({ vault }: { vault: Vault }) {
         >
           Deposit
         </button>
-        <button
-          type="button"
-          onClick={() => setOpen("policy")}
-          disabled={!isOwner}
-          className="rounded-full border border-[var(--color-line-2)] px-3 py-1 font-mono text-[11px] text-fg-2 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
-          title={isOwner ? "Raise or lower the spend caps" : "Connect the owner wallet to manage"}
+        <Link
+          to={isOwner ? `/console/vaults/${vault.pubkey}/policy` : "#"}
+          aria-disabled={!isOwner}
+          className={`rounded-full border border-[var(--color-line-2)] px-3 py-1 font-mono text-[11px] transition ${
+            isOwner
+              ? "text-fg-2 hover:bg-surface-2"
+              : "pointer-events-none cursor-not-allowed text-fg-2 opacity-40"
+          }`}
+          title={isOwner ? "Edit caps, post-pay, and whitelist" : "Connect the owner wallet to manage"}
         >
           Edit policy
-        </button>
+        </Link>
         <button
           type="button"
           onClick={onToggleFreeze}
@@ -384,9 +388,6 @@ function OwnerActions({ vault }: { vault: Vault }) {
       {open === "deposit" && (
         <DepositModal vault={vault} onClose={() => setOpen(null)} />
       )}
-      {open === "policy" && (
-        <EditPolicyModal vault={vault} onClose={() => setOpen(null)} />
-      )}
     </>
   );
 }
@@ -395,10 +396,47 @@ function DepositModal({ vault, onClose }: { vault: Vault; onClose: () => void })
   const { connection } = useConnection();
   const wallet = useWallet();
   const qc = useQueryClient();
+  const balances = useWalletBalances(vault.usdc_mint);
   const [amount, setAmount] = useState("1");
   const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  const [airdropping, setAirdropping] = useState(false);
+  const [canAirdrop, setCanAirdrop] = useState(false);
+
+  useEffect(() => {
+    if (!wallet.publicKey) return;
+    let cancelled = false;
+    isMintAuthority(connection, wallet.publicKey, new PublicKey(vault.usdc_mint))
+      .then((yes) => {
+        if (!cancelled) setCanAirdrop(yes);
+      })
+      .catch(() => {
+        if (!cancelled) setCanAirdrop(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connection, wallet.publicKey, vault.usdc_mint]);
+
+  const onAirdrop = async () => {
+    if (!wallet.publicKey || !wallet.signTransaction) return;
+    setError(null);
+    setAirdropping(true);
+    try {
+      await mintTestUsdc({
+        connection,
+        wallet: { publicKey: wallet.publicKey, signTransaction: wallet.signTransaction },
+        mint: new PublicKey(vault.usdc_mint),
+        amountUsdcMicro: 50 * 1_000_000,
+      });
+      await balances.refetch();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAirdropping(false);
+    }
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -445,6 +483,27 @@ function DepositModal({ vault, onClose }: { vault: Vault; onClose: () => void })
         />
       ) : (
         <form onSubmit={onSubmit} className="grid gap-4">
+          <div className="flex items-baseline justify-between rounded-md border border-[var(--color-line)] bg-surface-2 px-3 py-2">
+            <div className="grid gap-0.5">
+              <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">
+                Your wallet
+              </span>
+              <span className="font-mono text-[13px] text-mint">
+                {balances.data ? `${formatUsdcWallet(balances.data.usdcMicro)} test-USDC` : "…"}
+              </span>
+            </div>
+            {canAirdrop ? (
+              <button
+                type="button"
+                onClick={onAirdrop}
+                disabled={airdropping}
+                className="font-mono text-[11px] text-mint-soft hover:text-mint disabled:opacity-50"
+                title="Mint 50 more test-USDC to your wallet (you're the mint authority)"
+              >
+                {airdropping ? "minting…" : "+ mint 50"}
+              </button>
+            ) : null}
+          </div>
           <Field label="Amount (test-USDC)">
             <input
               type="number"
@@ -462,108 +521,6 @@ function DepositModal({ vault, onClose }: { vault: Vault; onClose: () => void })
           {error && <ErrorLine text={error} />}
           <ModalFooter
             submitLabel={status === "submitting" ? "Submitting…" : "Deposit"}
-            submitting={status === "submitting"}
-            onClose={onClose}
-          />
-        </form>
-      )}
-    </Modal>
-  );
-}
-
-function EditPolicyModal({ vault, onClose }: { vault: Vault; onClose: () => void }) {
-  const { connection } = useConnection();
-  const wallet = useWallet();
-  const qc = useQueryClient();
-  const [perTx, setPerTx] = useState(String(vault.per_tx_limit_usdc / 1_000_000));
-  const [hourly, setHourly] = useState(String(vault.hourly_limit_usdc / 1_000_000));
-  const [lifetime, setLifetime] = useState(String(vault.lifetime_limit_usdc / 1_000_000));
-  const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [signature, setSignature] = useState<string | null>(null);
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!wallet.publicKey || !wallet.signTransaction) {
-      setError("Wallet not connected");
-      return;
-    }
-    const parse = (s: string) => {
-      const n = Number(s);
-      if (!Number.isFinite(n) || n < 0) throw new Error(`Invalid value: ${s}`);
-      return Math.round(n * 1_000_000);
-    };
-    setError(null);
-    setStatus("submitting");
-    try {
-      const sig = await updatePolicy({
-        connection,
-        wallet: {
-          publicKey: wallet.publicKey,
-          signTransaction: wallet.signTransaction,
-        },
-        owner: new PublicKey(vault.owner),
-        agent: new PublicKey(vault.agent),
-        perTxUsdcMicro: parse(perTx),
-        hourlyUsdcMicro: parse(hourly),
-        lifetimeUsdcMicro: parse(lifetime),
-      });
-      setSignature(sig);
-      setStatus("done");
-      await qc.invalidateQueries({ queryKey: queryKeys.vault(vault.pubkey) });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setStatus("idle");
-    }
-  };
-
-  return (
-    <Modal title="Edit policy" onClose={onClose}>
-      {status === "done" ? (
-        <DoneState
-          signature={signature ?? ""}
-          message="Policy caps updated on chain."
-          onClose={onClose}
-        />
-      ) : (
-        <form onSubmit={onSubmit} className="grid gap-4">
-          <Field label="Per-tx cap (USDC)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={perTx}
-              onChange={(e) => setPerTx(e.target.value)}
-              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
-            />
-          </Field>
-          <Field label="Hourly cap (USDC)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={hourly}
-              onChange={(e) => setHourly(e.target.value)}
-              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
-            />
-          </Field>
-          <Field label="Lifetime cap (USDC)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={lifetime}
-              onChange={(e) => setLifetime(e.target.value)}
-              className="w-full rounded-md border border-[var(--color-line-2)] bg-surface px-3 py-2 font-mono text-[13px] text-fg outline-none focus:border-mint-soft"
-            />
-          </Field>
-          <p className="m-0 text-[12px] text-muted">
-            Whitelist + post-pay are preserved. The rolling-hour counter doesn't reset on update —
-            spent USDC in the last ~60 min still counts toward the new cap.
-          </p>
-          {error && <ErrorLine text={error} />}
-          <ModalFooter
-            submitLabel={status === "submitting" ? "Submitting…" : "Update policy"}
             submitting={status === "submitting"}
             onClose={onClose}
           />

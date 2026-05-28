@@ -1,9 +1,7 @@
 // Per-agent live event stream. Wraps the backend's /ws/agents/:pk endpoint
-// behind a callback API; flips to a synthetic emitter when VITE_USE_MOCKS=1
-// so detail pages render the same connection-state badge + ticker offline.
+// behind a callback API with reconnect.
 
 import { config } from "../config";
-import { MOCK_AGENTS } from "./mocks";
 import type { LiveEventFrame } from "@/types/api";
 
 export type LiveStatus = "connecting" | "open" | "reconnecting" | "closed";
@@ -18,13 +16,6 @@ export function subscribeAgent(
   onFrame: FrameHandler,
   onStatus?: StatusHandler,
 ): LiveSubscription {
-  if (config.useMocks) return mockSubscribe(pubkey, onFrame, onStatus);
-  return wsSubscribe(pubkey, onFrame, onStatus);
-}
-
-// ---------- Real WS, with reconnect ----------
-
-function wsSubscribe(pubkey: string, onFrame: FrameHandler, onStatus?: StatusHandler): LiveSubscription {
   let socket: WebSocket | null = null;
   let alive = true;
   let attempts = 0;
@@ -89,99 +80,4 @@ function wsUrl(path: string): string {
   if (base.startsWith("https://")) return base.replace(/^https/, "wss") + path;
   if (base.startsWith("http://")) return base.replace(/^http/, "ws") + path;
   return base + path;
-}
-
-// ---------- Mock emitter ----------
-
-const MOCK_SERVICES = [
-  "Pyth", "HelixData", "Cortex", "JitoRPC", "OrcaSwap", "Helius", "Jupiter", "ArweaveGate",
-];
-
-function mockSubscribe(pubkey: string, onFrame: FrameHandler, onStatus?: StatusHandler): LiveSubscription {
-  let alive = true;
-  let counter = 0;
-  let timer: number | null = null;
-  const agent = MOCK_AGENTS.find((a) => a.pubkey === pubkey) ?? MOCK_AGENTS[0]!;
-
-  // Tiny delay so the "connecting" → "open" transition is visible in the UI.
-  onStatus?.("connecting");
-  window.setTimeout(() => {
-    if (!alive) return;
-    onStatus?.("open");
-    schedule();
-  }, 350);
-
-  function schedule() {
-    if (!alive) return;
-    const next = 1800 + Math.random() * 3200;
-    timer = window.setTimeout(emitOne, next);
-  }
-
-  function emitOne() {
-    if (!alive) return;
-    counter += 1;
-    const slot = agent.last_active_slot + counter * 8;
-    const r = Math.random();
-    let frame: LiveEventFrame;
-    if (r < 0.72) {
-      frame = {
-        type: "event",
-        signature: randSig(),
-        log_index: 0,
-        slot,
-        program_id: "Vau1111111111111111111111111111111111111111",
-        event_name: "Spent",
-        payload: {
-          agent: pubkey,
-          service: MOCK_SERVICES[Math.floor(Math.random() * MOCK_SERVICES.length)],
-          amount_usdc: Math.round((1000 + Math.random() * 60_000)),
-        },
-      };
-    } else if (r < 0.88) {
-      frame = {
-        type: "event",
-        signature: randSig(),
-        log_index: 0,
-        slot,
-        program_id: "Vau1111111111111111111111111111111111111111",
-        event_name: "Claimed",
-        payload: {
-          agent: pubkey,
-          service: MOCK_SERVICES[Math.floor(Math.random() * MOCK_SERVICES.length)],
-          amount_usdc: Math.round((1 + Math.random() * 22) * 1_000_000),
-        },
-      };
-    } else {
-      const base = agent.score ?? 700;
-      const delta = Math.round((Math.random() - 0.45) * 18);
-      frame = {
-        type: "event",
-        signature: randSig(),
-        log_index: 0,
-        slot,
-        program_id: "Rep1111111111111111111111111111111111111111",
-        event_name: "ScoreComputed",
-        payload: { agent: pubkey, score: Math.max(0, Math.min(1000, base + delta)) },
-      };
-    }
-    onFrame(frame);
-    schedule();
-  }
-
-  return {
-    unsubscribe() {
-      alive = false;
-      if (timer !== null) window.clearTimeout(timer);
-      onStatus?.("closed");
-    },
-  };
-}
-
-function randSig(): string {
-  const c = "abcdefghkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let s = "";
-  for (let i = 0; i < 4; i++) s += c[Math.floor(Math.random() * c.length)]!;
-  s += "..";
-  for (let i = 0; i < 4; i++) s += c[Math.floor(Math.random() * c.length)]!;
-  return s;
 }

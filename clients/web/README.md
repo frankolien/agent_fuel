@@ -52,7 +52,7 @@ src/
 │   └── api.ts            Backend response shapes (Agent, Vault, Event, …)
 └── lib/
     ├── cn.ts             Classnames helper
-    ├── config.ts         VITE_API_BASE, VITE_USE_MOCKS, VITE_SOLANA_RPC, … — read-once, frozen
+    ├── config.ts         VITE_API_BASE, VITE_SOLANA_RPC, … — read-once, frozen
     ├── http.ts           Typed fetch wrapper (Authorization header, HttpError)
     ├── auth-store.ts     JWT in localStorage with subscribe()
     ├── format.ts         USDC / number / pubkey / slot→ago formatters
@@ -60,9 +60,8 @@ src/
         ├── client.ts        api.listAgents(), api.getVault(), … — every call goes through here
         ├── hooks.ts         useAgentsQuery(), useAgentQuery(pk), useVaultsQuery(), …
         ├── keys.ts          queryKeys.agent(pk), queryKeys.vaultActivity(pk), …
-        ├── live.ts          subscribeAgent(pk) — WS with reconnect; mock emitter swap
-        ├── useLiveAgent.ts  Per-agent live merge into TanStack cache
-        └── mocks.ts         Seed data for VITE_USE_MOCKS=1
+        ├── live.ts          subscribeAgent(pk) — WS with reconnect
+        └── useLiveAgent.ts  Per-agent live merge into TanStack cache
 ```
 
 Section data lives in `content.ts` so copy edits don't require touching JSX.
@@ -81,8 +80,9 @@ npm run build
 npm run preview
 ```
 
-Set `VITE_USE_MOCKS=1` in `.env` to swap the API client for in-memory seed
-data — useful when the backend isn't running.
+The console talks to a real backend (default `http://localhost:8080`, or whatever
+`VITE_API_BASE` points to). Run `cargo run` in `../../backend` first, or point
+`VITE_API_BASE` at the deployed backend if you only want to work on the UI.
 
 ## Design source
 

@@ -9,26 +9,64 @@ import type {
   EventRow,
   ReputationLookup,
   ScorePoint,
+  Service,
   Vault,
 } from "@/types/api";
 import { useAuth } from "@/app/auth";
 import { HttpError } from "@/lib/http";
-import { readVaultFromChain, readVaultsFromChainByOwner } from "@/lib/owner-actions";
+import {
+  readAgentFromChain,
+  readAgentsFromChainByOwner,
+  readServicesFromChain,
+  readVaultFromChain,
+  readVaultsFromChainByAgent,
+  readVaultsFromChainByOwner,
+} from "@/lib/owner-actions";
 import { api } from "./client";
 import { queryKeys } from "./keys";
 
 export function useAgentsQuery(): UseQueryResult<Agent[]> {
+  const { connection } = useConnection();
+  const { walletPubkey } = useAuth();
   return useQuery({
-    queryKey: queryKeys.agents(),
-    queryFn: () => api.listAgents(),
+    // Scope by wallet so the cache resets when the user switches owners.
+    queryKey: walletPubkey ? [...queryKeys.agents(), walletPubkey] : queryKeys.agents(),
+    queryFn: async () => {
+      const fromBackend = await api.listAgents();
+      if (!walletPubkey) return fromBackend;
+      // If the backend already has indexed agents, prefer that (it has the
+      // computed reputation + indexed activity hooks). Otherwise scan the
+      // chain for AgentProfile accounts owned by the connected wallet.
+      if (fromBackend.length > 0) return fromBackend;
+      try {
+        return await readAgentsFromChainByOwner(connection, new PublicKey(walletPubkey));
+      } catch (err) {
+        console.warn("agents chain fallback failed", err);
+        return fromBackend; // empty
+      }
+    },
+    placeholderData: (prev) => prev,
   });
 }
 
 export function useAgentQuery(pubkey: string | undefined): UseQueryResult<Agent> {
+  const { connection } = useConnection();
   return useQuery({
     queryKey: pubkey ? queryKeys.agent(pubkey) : ["agent", "missing"],
-    queryFn: () => api.getAgent(pubkey!),
+    queryFn: async () => {
+      try {
+        return await api.getAgent(pubkey!);
+      } catch (err) {
+        // Indexer gap fallback — same pattern as useVaultQuery.
+        if (err instanceof HttpError && err.status === 404) {
+          const onChain = await readAgentFromChain(connection, new PublicKey(pubkey!));
+          if (onChain) return onChain;
+        }
+        throw err;
+      }
+    },
     enabled: !!pubkey,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -40,6 +78,22 @@ export function useAgentActivityQuery(
     queryKey: pubkey ? [...queryKeys.agentActivity(pubkey), before ?? "head"] : ["agent-activity", "missing"],
     queryFn: () => api.agentActivity(pubkey!, before === undefined ? {} : { before_slot: before }),
     enabled: !!pubkey,
+  });
+}
+
+export function useAgentVaultsQuery(
+  pubkey: string | undefined,
+): UseQueryResult<Vault[]> {
+  const { connection } = useConnection();
+  return useQuery({
+    queryKey: pubkey ? queryKeys.agentVaults(pubkey) : ["agent-vaults", "missing"],
+    queryFn: async () => {
+      // No backend endpoint yet for "vaults by agent" — read chain directly.
+      // Cheap (1 getProgramAccounts + N fetches; users rarely have many vaults).
+      return readVaultsFromChainByAgent(connection, new PublicKey(pubkey!));
+    },
+    enabled: !!pubkey,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -121,6 +175,15 @@ export function useVaultActivityQuery(
     queryKey: pubkey ? [...queryKeys.vaultActivity(pubkey), before ?? "head"] : ["vault-activity", "missing"],
     queryFn: () => api.vaultActivity(pubkey!, before === undefined ? {} : { before_slot: before }),
     enabled: !!pubkey,
+  });
+}
+
+export function useServicesQuery(): UseQueryResult<Service[]> {
+  const { connection } = useConnection();
+  return useQuery({
+    queryKey: ["services", "chain"],
+    queryFn: () => readServicesFromChain(connection),
+    placeholderData: (prev) => prev,
   });
 }
 
