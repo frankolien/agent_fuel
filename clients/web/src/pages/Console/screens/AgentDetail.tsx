@@ -8,6 +8,7 @@ import {
   useAgentQuery,
   useAgentScoreHistoryQuery,
   useAgentVaultsQuery,
+  useBackfillAgent,
 } from "@/lib/api/hooks";
 import { queryKeys } from "@/lib/api/keys";
 import { useLiveAgent } from "@/lib/api/useLiveAgent";
@@ -244,9 +245,19 @@ function HeaderActions({
   onCreateVault: () => void;
 }) {
   const { publicKey } = useWallet();
+  const backfill = useBackfillAgent(agent.pubkey);
   return (
     <div className="flex items-center gap-2">
       <LiveBadge status={live.status} />
+      <button
+        type="button"
+        onClick={() => backfill.mutate()}
+        disabled={backfill.isPending}
+        title="Replay this agent's on-chain history through the indexer. Safe to run anytime — it's idempotent."
+        className="inline-flex h-8 items-center rounded-md border border-white/[0.16] bg-surface-2 px-3 font-mono text-[11.5px] text-fg-2 hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {backfill.isPending ? "Backfilling…" : "Backfill ↻"}
+      </button>
       <button
         type="button"
         onClick={onCreateVault}

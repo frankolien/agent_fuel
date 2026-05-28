@@ -19,6 +19,10 @@ pub struct Config {
     /// indexer's exposure to oversized POSTs. Override with
     /// `WEBHOOK_BODY_MAX_BYTES`. Default: 2 MiB.
     pub webhook_body_max_bytes: usize,
+    /// Solana JSON-RPC endpoint used for on-demand chain backfills. `None`
+    /// disables the backfill endpoint with 503. Override with `SOLANA_RPC_URL`
+    /// (e.g. a Helius RPC URL like `https://mainnet.helius-rpc.com/?api-key=…`).
+    pub solana_rpc_url: Option<String>,
 }
 
 impl Config {
@@ -54,6 +58,10 @@ impl Config {
             .and_then(|v| v.parse().ok())
             .unwrap_or(2 * 1024 * 1024);
 
+        let solana_rpc_url = env::var("SOLANA_RPC_URL")
+            .ok()
+            .filter(|s| !s.is_empty());
+
         Ok(Self {
             bind_addr,
             database_url,
@@ -65,6 +73,7 @@ impl Config {
             siws_chain_id,
             cors_allowed_origins,
             webhook_body_max_bytes,
+            solana_rpc_url,
         })
     }
 }

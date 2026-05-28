@@ -77,6 +77,15 @@ export type ScorePoint = {
   recorded_at: string;
 };
 
+/** Server-side report from `POST /api/agents/{pk}/backfill`. Mirrors
+ *  `backend::backfill::BackfillReport`. `events_inserted` is 0 on a replay
+ *  (idempotent `ON CONFLICT DO NOTHING` in `persist::insert_events`). */
+export type BackfillReport = {
+  signatures_scanned: number;
+  transactions_parsed: number;
+  events_inserted: number;
+};
+
 // Public reputation lookup keeps `score` nullable — distinguishes
 // "compute_score has never run" from "score is 0", per
 // `backend/src/routes/reputation.rs::ReputationResponse`.

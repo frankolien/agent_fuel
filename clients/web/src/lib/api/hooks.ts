@@ -3,9 +3,16 @@
 
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 import type {
   Agent,
+  BackfillReport,
   EventRow,
   ReputationLookup,
   ScorePoint,
@@ -285,6 +292,30 @@ function normalizeBackendService(row: unknown): Service {
     first_active_slot: Number(r["init_slot"] ?? r["first_active_slot"] ?? 0),
     last_active_slot: Number(r["last_active_slot"] ?? 0),
   };
+}
+
+/** Triggers an owner-gated server-side replay of the agent's on-chain history.
+ *  On success, invalidates everything keyed by the agent so the just-indexed
+ *  events show up immediately without a full page reload. */
+export function useBackfillAgent(
+  pubkey: string | undefined,
+): UseMutationResult<BackfillReport, Error, void> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => {
+      if (!pubkey) throw new Error("pubkey required");
+      return api.backfillAgent(pubkey);
+    },
+    onSuccess: () => {
+      if (!pubkey) return;
+      // The detail row + score history + activity all derive from the same
+      // event stream that backfill just populated. Force-fresh them all.
+      qc.invalidateQueries({ queryKey: queryKeys.agent(pubkey) });
+      qc.invalidateQueries({ queryKey: queryKeys.agentActivity(pubkey) });
+      qc.invalidateQueries({ queryKey: queryKeys.agentScoreHistory(pubkey) });
+      qc.invalidateQueries({ queryKey: queryKeys.agents() });
+    },
+  });
 }
 
 export function useReputationQuery(

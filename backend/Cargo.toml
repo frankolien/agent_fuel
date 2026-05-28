@@ -52,6 +52,13 @@ ed25519-dalek = "2"
 rand = "0.8"
 hex = "0.4"
 chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
+# On-demand chain backfill — fetches signatures + full transactions from RPC
+# and replays them through the existing parser + mirror pipeline.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
+# Off-curve check for Solana PDA derivation (find_program_address). Already a
+# transitive dep via ed25519-dalek; making it explicit so the backfill module's
+# requirements are declared at the surface.
+curve25519-dalek = { version = "4", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 actix-rt = "2"

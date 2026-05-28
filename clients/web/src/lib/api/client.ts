@@ -4,6 +4,7 @@
 import { request } from "../http";
 import type {
   Agent,
+  BackfillReport,
   EventRow,
   ReputationLookup,
   ScorePoint,
@@ -47,6 +48,11 @@ export const api = {
 
   agentScoreHistory(pubkey: string): Promise<ScorePoint[]> {
     return request(`/api/agents/${pubkey}/score/history`);
+  },
+
+  /** Owner-gated on-demand chain replay for agents pre-dating the indexer. */
+  backfillAgent(pubkey: string): Promise<BackfillReport> {
+    return request(`/api/agents/${pubkey}/backfill`, { method: "POST" });
   },
 
   // ---- Vaults (owner-scoped) ----

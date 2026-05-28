@@ -1,6 +1,7 @@
 use actix_web::web;
 
 pub mod agents;
+pub mod backfill;
 pub mod devices;
 pub mod pagination;
 pub mod services;
@@ -11,6 +12,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(agents::detail)
         .service(agents::activity)
         .service(agents::score_history)
+        .service(backfill::agent)
         .service(vaults::list)
         .service(vaults::detail)
         .service(vaults::activity)

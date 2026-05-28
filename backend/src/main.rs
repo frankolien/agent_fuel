@@ -57,6 +57,16 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    let rpc_client = cfg
+        .solana_rpc_url
+        .as_ref()
+        .map(|url| Arc::new(agent_fuel_backend::backfill::RpcClient::new(url.clone())));
+    if rpc_client.is_none() {
+        tracing::warn!(
+            "SOLANA_RPC_URL unset — /api/agents/{{pk}}/backfill returns 503 until configured"
+        );
+    }
+
     let state = web::Data::new(AppState {
         pool,
         helius_webhook_secret: cfg.helius_webhook_secret.clone(),
@@ -68,6 +78,7 @@ async fn main() -> anyhow::Result<()> {
         // LogNotifier is the dev default; a real FCM dispatcher slots in
         // here once FCM_SERVICE_ACCOUNT_JSON is provisioned.
         notifier: Arc::new(LogNotifier),
+        rpc_client,
     });
     let bind = cfg.bind_addr.clone();
     let cors_origins = cfg.cors_allowed_origins.clone();
