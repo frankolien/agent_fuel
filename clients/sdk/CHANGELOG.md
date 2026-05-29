@@ -2,6 +2,12 @@
 
 All notable changes to `@agent-fuel/sdk` are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — 2026-05-29
+
+### Changed
+
+- Moved `@coral-xyz/anchor` and `@solana/spl-token` from `peerDependencies` to `dependencies`. Host apps no longer need to provide compatible versions; the SDK ships its own and isolates from version skew (notably anchor 0.29 vs 0.31, which caused `BN.init` assertions when consumed from Solana Agent Kit).
+
 ## [0.1.0] — 2026-05-27
 
 First public release. Six-method surface for AI agents to read reputation, pay services from a credit vault, and stream live events — plus an x402 fetch wrapper.
