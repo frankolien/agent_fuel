@@ -1,0 +1,67 @@
+name: agent_fuel_mobile
+description: Agent Fuel mobile console — vault + reputation management for AI agents on Solana.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # Solana primitives — RPC client, Borsh, Ed25519 keypairs.
+  solana: ^0.31.0
+
+  # Mobile Wallet Adapter (Android). Espresso Cash's reference client
+  # implementation. The dApp dispatches a `solana-wallet://` intent and
+  # Android shows its system chooser — every installed MWA wallet (Phantom,
+  # Solflare, Backpack, Seed Vault Wallet on Seeker, …) lights up
+  # automatically. iOS is not supported by MWA and lands in a later phase.
+  solana_mobile_client: ^0.1.2
+
+  # State management — BLoC pattern.
+  flutter_bloc: ^8.1.6
+  bloc: ^8.1.4
+  equatable: ^2.0.5
+
+  # Dependency injection — hand-wired in lib/app/di.dart.
+  get_it: ^7.7.0
+
+  # Functional error handling (Either<Failure, Success>).
+  dartz: ^0.10.1
+
+  # Navigation.
+  auto_route: ^9.2.2
+
+  # Networking.
+  dio: ^5.5.0
+  web_socket_channel: ^2.4.0
+
+  # Secure on-device storage + biometric.
+  flutter_secure_storage: ^9.2.2
+  local_auth: ^2.3.0
+
+  # Deep links — agentfuel:// for Phantom callbacks and vault sharing.
+  app_links: ^6.3.0
+
+  # UI utilities.
+  google_fonts: ^6.2.1
+  fl_chart: ^0.69.0
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.4
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.11
+  auto_route_generator: ^9.0.0
+
+flutter:
+  uses-material-design: true
+  # JetBrains Mono is fetched at runtime via google_fonts. If we ever want
+  # offline-first or to drop the google_fonts dep, ship the .ttf files under
+  # assets/fonts/ and re-declare them here.

@@ -1,30 +1,45 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { useQueryClient } from "@tanstack/react-query";
-import type { Agent, EventRow, LiveEventFrame } from "@/types/api";
+import { PublicKey } from "@solana/web3.js";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
+import type { Agent, EventRow, LiveEventFrame, ScorePoint, Vault } from "@/types/api";
+import { vaultBalance } from "@/types/api";
 import { useAgentsQuery } from "@/lib/api/hooks";
+import { readVaultsFromChainByAgent } from "@/lib/owner-actions";
+import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/keys";
 import {
   AgentAlreadyInitializedError,
   initializeAgent,
 } from "@/lib/owner-actions";
+import { HttpError } from "@/lib/http";
 import { AgentModeSelector, type AgentChoice } from "../components/AgentMode";
 import { RegisterServiceModal } from "../components/RegisterServiceModal";
 import { formatNumberCompact, formatUsdcCompact } from "@/lib/format";
 import { Screen } from "./Screen";
 import { ActivityRow } from "../components/ActivityRow";
-import { AgentCard } from "../components/AgentCard";
+import { AgentCard, type AgentStatus, type EnrichedAgent } from "../components/AgentCard";
 import { Card } from "../components/Card";
 import { Kpi, KpiStrip } from "../components/Kpi";
 import { LiveBadge } from "../components/LiveBadge";
 import { Skeleton, SkeletonRows } from "../components/Skeleton";
+import { useFleetActivity } from "../useFleetActivity";
 import { useFleetTicker } from "../useFleetTicker";
+
+type SortKey = "reputation" | "spend24h" | "vault" | "tx";
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "reputation", label: "reputation" },
+  { key: "spend24h", label: "24h spend" },
+  { key: "vault", label: "vault" },
+  { key: "tx", label: "tx" },
+];
 
 export function Fleet() {
   const agentsQuery = useAgentsQuery();
   const frames = useFleetTicker();
   const { publicKey } = useWallet();
   const [openModal, setOpenModal] = useState<null | "agent" | "service">(null);
+  const [sortKey, setSortKey] = useState<SortKey>("reputation");
 
   return (
     <Screen
@@ -60,15 +75,12 @@ export function Fleet() {
         <Card
           title="Agents"
           meta={agentsQuery.data ? `${agentsQuery.data.length} total` : "—"}
+          tools={<SortControl sortKey={sortKey} onChange={setSortKey} />}
         >
           {agentsQuery.isLoading ? (
             <SkeletonRows rows={3} height={140} />
           ) : agentsQuery.data && agentsQuery.data.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {agentsQuery.data.map((agent) => (
-                <AgentCard key={agent.pubkey} agent={agent} />
-              ))}
-            </div>
+            <AgentGrid agents={agentsQuery.data} sortKey={sortKey} />
           ) : (
             <EmptyState note='No agents yet. Click "+ Initialize agent" above to create one.' />
           )}
@@ -89,6 +101,180 @@ export function Fleet() {
       {openModal === "service" && <RegisterServiceModal onClose={() => setOpenModal(null)} />}
     </Screen>
   );
+}
+
+// --- Agents grid + enrichment -------------------------------------------
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function AgentGrid({
+  agents,
+  sortKey,
+}: {
+  agents: ReadonlyArray<Agent>;
+  sortKey: SortKey;
+}) {
+  const enriched = useEnrichedAgents(agents);
+  const sorted = useMemo(
+    () => sortEnriched(enriched, sortKey),
+    [enriched, sortKey],
+  );
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {sorted.map((data) => (
+        <AgentCard key={data.agent.pubkey} data={data} />
+      ))}
+    </div>
+  );
+}
+
+function SortControl({
+  sortKey,
+  onChange,
+}: {
+  sortKey: SortKey;
+  onChange: (k: SortKey) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted uppercase">
+        sort
+      </span>
+      <div className="inline-flex rounded-md border border-[var(--color-line-2)] bg-surface-2 p-0.5 font-mono text-[11px]">
+        {SORT_OPTIONS.map((opt) => (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => onChange(opt.key)}
+            className={`rounded-[5px] px-2.5 py-1 transition ${
+              sortKey === opt.key ? "bg-bg text-fg" : "text-muted hover:text-fg-2"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function useEnrichedAgents(agents: ReadonlyArray<Agent>): EnrichedAgent[] {
+  const { connection } = useConnection();
+  const fleet = useFleetActivity();
+
+  // Per-agent vault list (chain reads — used for vault balance + frozen state).
+  const vaultQueries = useQueries({
+    queries: agents.map((a) => ({
+      queryKey: [...queryKeys.agentVaults(a.pubkey), "card-summary"],
+      queryFn: async (): Promise<Vault[]> => {
+        const vs = await readVaultsFromChainByAgent(connection, new PublicKey(a.pubkey));
+        return Array.isArray(vs) ? vs : [];
+      },
+      staleTime: 30_000,
+    })),
+  });
+
+  // Per-agent score history (REST — for 24h delta calc).
+  const scoreQueries = useQueries({
+    queries: agents.map((a) => ({
+      queryKey: queryKeys.agentScoreHistory(a.pubkey),
+      queryFn: async (): Promise<ScorePoint[]> => {
+        try {
+          return await api.agentScoreHistory(a.pubkey);
+        } catch (err) {
+          if (err instanceof HttpError && err.status === 404) return [];
+          throw err;
+        }
+      },
+      staleTime: 30_000,
+      retry: (count: number, err: unknown) =>
+        err instanceof HttpError && err.status === 404 ? false : count < 2,
+    })),
+  });
+
+  return useMemo(() => {
+    const since = Date.now() - ONE_DAY_MS;
+
+    // Bucket 24h spend by agent_pubkey for O(1) lookup per agent.
+    const spendByAgent = new Map<string, { volume: number; tx: number }>();
+    for (const row of fleet.rows) {
+      if (row.event_name !== "Spent") continue;
+      const ts = Date.parse(row.received_at);
+      if (!Number.isFinite(ts) || ts < since) continue;
+      const amount = typeof row.payload["amount_usdc"] === "number" ? (row.payload["amount_usdc"] as number) : 0;
+      const slot = spendByAgent.get(row.agent_pubkey) ?? { volume: 0, tx: 0 };
+      slot.volume += amount;
+      slot.tx += 1;
+      spendByAgent.set(row.agent_pubkey, slot);
+    }
+
+    return agents.map((agent, i) => {
+      const vaults = (vaultQueries[i]?.data ?? []) as Vault[];
+      const totalBalance = vaults.reduce((s, v) => s + vaultBalance(v), 0);
+      const anyFrozen = vaults.some((v) => v.frozen);
+
+      const recent = spendByAgent.get(agent.pubkey) ?? { volume: 0, tx: 0 };
+
+      const history = (scoreQueries[i]?.data ?? []) as ScorePoint[];
+      const scoreDelta24h = computeScoreDelta24h(history, agent.score, since);
+
+      return {
+        agent,
+        vaultBalanceUsd: totalBalance,
+        spend24hUsd: recent.volume,
+        tx24h: recent.tx,
+        scoreDelta24h,
+        status: classifyStatus(agent, anyFrozen, recent.tx),
+      };
+    });
+  }, [agents, fleet.rows, vaultQueries, scoreQueries]);
+}
+
+function computeScoreDelta24h(
+  history: ScorePoint[],
+  currentScore: number,
+  sinceMs: number,
+): number | null {
+  if (currentScore <= 0) return null;
+  if (history.length === 0) return null;
+  // Find the last score recorded BEFORE the 24h window opens.
+  let prior: number | null = null;
+  for (const p of history) {
+    const ts = Date.parse(p.recorded_at);
+    if (!Number.isFinite(ts) || ts >= sinceMs) break;
+    prior = p.score;
+  }
+  if (prior === null) return null;
+  return currentScore - prior;
+}
+
+function classifyStatus(
+  agent: Agent,
+  frozen: boolean,
+  recentTx: number,
+): AgentStatus {
+  if (frozen) return "frozen";
+  if (agent.score === 0) return "dormant";
+  if (agent.score < 500 || agent.active_negative_feedback_count > 0) return "watch";
+  if (recentTx === 0) return "dormant";
+  return "active";
+}
+
+function sortEnriched(rows: EnrichedAgent[], key: SortKey): EnrichedAgent[] {
+  const arr = [...rows];
+  arr.sort((a, b) => {
+    switch (key) {
+      case "reputation":
+        return b.agent.score - a.agent.score;
+      case "spend24h":
+        return b.spend24hUsd - a.spend24hUsd;
+      case "vault":
+        return b.vaultBalanceUsd - a.vaultBalanceUsd;
+      case "tx":
+        return b.tx24h - a.tx24h;
+    }
+  });
+  return arr;
 }
 
 function FleetKpis({ agents }: { agents: ReadonlyArray<Agent> }) {
