@@ -66,17 +66,38 @@ class OnboardingIdentity extends OnboardingState {
 }
 
 class OnboardingFund extends OnboardingState {
-  const OnboardingFund({required super.flow, this.authToken});
+  const OnboardingFund({
+    required super.flow,
+    this.authToken,
+    this.loadingBalance = false,
+    this.usdcBalanceMicro,
+    this.balanceError,
+  });
   final String? authToken;
+  final bool loadingBalance;
+  final int? usdcBalanceMicro;
+  final String? balanceError;
 
   @override
   OnboardingStep get step => OnboardingStep.fund;
 
-  OnboardingFund copyWith({OnboardingFlow? flow}) =>
-      OnboardingFund(flow: flow ?? this.flow, authToken: authToken);
+  OnboardingFund copyWith({
+    OnboardingFlow? flow,
+    bool? loadingBalance,
+    int? usdcBalanceMicro,
+    String? balanceError,
+  }) =>
+      OnboardingFund(
+        flow: flow ?? this.flow,
+        authToken: authToken,
+        loadingBalance: loadingBalance ?? this.loadingBalance,
+        usdcBalanceMicro: usdcBalanceMicro ?? this.usdcBalanceMicro,
+        balanceError: balanceError ?? this.balanceError,
+      );
 
   @override
-  List<Object?> get props => [flow, authToken];
+  List<Object?> get props =>
+      [flow, authToken, loadingBalance, usdcBalanceMicro, balanceError];
 }
 
 class OnboardingGuardrails extends OnboardingState {
@@ -107,6 +128,15 @@ class OnboardingGuardrails extends OnboardingState {
 
 class OnboardingSuccess extends OnboardingState {
   const OnboardingSuccess({required super.flow});
+
+  @override
+  OnboardingStep get step => OnboardingStep.success;
+}
+
+/// Sign-in succeeded and the wallet already owns agents — UI should jump
+/// straight to Fleet without showing the wizard's congratulations screen.
+class OnboardingComplete extends OnboardingState {
+  const OnboardingComplete({required super.flow});
 
   @override
   OnboardingStep get step => OnboardingStep.success;

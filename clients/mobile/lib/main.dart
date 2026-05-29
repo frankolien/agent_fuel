@@ -22,5 +22,5 @@ class AgentFuelApp extends StatelessWidget {
       theme: buildTheme(),
       routerConfig: router.config(),
     );
-  } 
+  }
 }

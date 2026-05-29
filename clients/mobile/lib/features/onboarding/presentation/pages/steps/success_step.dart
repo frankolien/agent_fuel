@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../app/router.dart';
 import '../../../../../app/theme.dart';
+import '../../../../../core/config/env.dart';
 import '../../../domain/entities/onboarding_flow.dart';
 import '../../bloc/onboarding_bloc.dart';
 import '../../widgets/onboarding_scaffold.dart';
@@ -31,7 +32,6 @@ class _SuccessBody extends StatelessWidget {
     final mono = Theme.of(context).extension<AFTypography>()!.mono;
     final state = context.watch<OnboardingBloc>().state;
     final flow = state.flow;
-    final preset = PolicyPreset.presets[flow.riskProfile]!;
     final handle = flow.handle.isEmpty ? 'your agent' : flow.handle;
     return ListView(
       padding: EdgeInsets.zero,
@@ -85,23 +85,29 @@ class _SuccessBody extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 8),
           child: Text(
-            'Your agent is live on mainnet with a funded vault and reputation tracking enabled.',
+            'Your wizard configuration is locked in. On-chain initialization '
+            'runs the first time the agent calls a service.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AFColors.muted, fontSize: 15, height: 1.5),
           ),
         ),
         const SizedBox(height: 28),
-        _SummaryRow(label: 'Vault balance', value: '\$${flow.depositUsdc} USDC', mono: mono),
+        _SummaryRow(label: 'Network', value: AppEnv.cluster, mono: mono),
+        const SizedBox(height: 10),
+        _SummaryRow(
+          label: 'Planned deposit',
+          value: '\$${flow.depositUsdc} USDC',
+          mono: mono,
+        ),
         const SizedBox(height: 10),
         _SummaryRow(label: 'Framework', value: flow.framework.label, mono: mono),
         const SizedBox(height: 10),
         _SummaryRow(
           label: 'Spend limits',
-          value: '\$${preset.maxPerTxUsdc} tx  ·  \$${preset.maxPerHourUsdc} hr',
+          value:
+              '\$${_fmtUsd(flow.effectiveMaxPerTxUsdc)} tx  ·  \$${_fmtUsd(flow.effectiveMaxPerHourUsdc)} hr',
           mono: mono,
         ),
-        const SizedBox(height: 10),
-        _SummaryRow(label: 'Reputation', value: '000 · new', mono: mono),
       ],
     );
   }
@@ -135,4 +141,9 @@ class _SummaryRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _fmtUsd(double v) {
+  if (v == v.truncateToDouble()) return v.toStringAsFixed(0);
+  return v.toStringAsFixed(2);
 }

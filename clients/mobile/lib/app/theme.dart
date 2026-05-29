@@ -2,23 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AFColors {
-  static const bg = Color(0xFF0B0C0E);
+  static const bg = Color(0xFF000000);
   static const surface = Color(0xFF0E0F11);
-  static const surface2 = Color(0xFF15181B);
-  static const surface3 = Color(0xFF1E2226);
-  static const line = Color(0x1FFFFFFF);
-  static const line2 = Color(0x14FFFFFF);
+  static const surface2 = Color(0xFF15171A);
+  static const surface3 = Color(0xFF1E2024);
+  static const line = Color(0x17FFFFFF);
+  static const line2 = Color(0x29FFFFFF);
 
-  static const fg = Color(0xFFE5E7EA);
-  static const fg2 = Color(0xFFB7BEC5);
-  static const muted = Color(0xFF7B848C);
+  static const fg = Color(0xFFFFFFFF);
+  static const fg2 = Color(0xFFDCDFE2);
+  static const muted = Color(0xFF9DA1A6);
+  static const muted2 = Color(0xFF6A6E72);
 
-  static const mint = Color(0xFFA6E1CF);
+  static const mint = Color(0xFFD9F0E8);
+  static const mintDim = Color(0xFFB8E2D4);
+  static const mintDark = Color(0xFF6FA493);
   static const mintSoft = Color(0xFF7FBDA8);
-  static const mintGlow = Color(0x66A6E1CF);
+  static const mintGlow = Color(0x8CD9F0E8);
+  static const mintTint = Color(0x24D9F0E8);
 
   static const watch = Color(0xFFE6B86F);
   static const danger = Color(0xFFE08577);
+  static const dangerSoft = Color(0x29E08577);
 }
 
 ThemeData buildTheme() {

@@ -1,16 +1,12 @@
 class AppEnv {
-  // Default to Railway's raw subdomain rather than the custom domain — DNS
-  // for `api.agentfuel.online` can take a while to propagate to every
-  // device's system resolver, and Flutter's HTTP stack hard-fails on it.
-  // Override with --dart-define once the CNAME is stable on the target.
   static const apiBase = String.fromEnvironment(
     'AGENT_FUEL_API_BASE',
-    defaultValue: 'https://jx0m4jn1.up.railway.app',
+    defaultValue: 'https://api.agentfuel.online',
   );
 
   static const wsBase = String.fromEnvironment(
     'AGENT_FUEL_WS_BASE',
-    defaultValue: 'wss://jx0m4jn1.up.railway.app',
+    defaultValue: 'wss://api.agentfuel.online',
   );
 
   static const rpcUrl = String.fromEnvironment(
@@ -23,11 +19,18 @@ class AppEnv {
     defaultValue: 'devnet',
   );
 
+  // Devnet USDC mint (Circle's faucet at usdcfaucet.com mints this one).
+  // Override at build time when targeting mainnet.
+  static const usdcMint = String.fromEnvironment(
+    'AGENT_FUEL_USDC_MINT',
+    defaultValue: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+  );
+
   static const identityName = 'Agent Fuel';
 
   static const identityUri = String.fromEnvironment(
     'AGENT_FUEL_IDENTITY_URI',
-    defaultValue: 'https://github.com/frankolien/agent_fuel',
+    defaultValue: 'https://agentfuel.online',
   );
 
   // Relative URI matches the canonical Espresso Cash example — wallets just
@@ -39,4 +42,14 @@ class AppEnv {
   );
 
   static const deepLinkScheme = 'agentfuel';
+
+  static const reputationProgramId = String.fromEnvironment(
+    'AGENT_FUEL_REPUTATION_PROGRAM',
+    defaultValue: '4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ',
+  );
+
+  static const creditVaultProgramId = String.fromEnvironment(
+    'AGENT_FUEL_CREDIT_VAULT_PROGRAM',
+    defaultValue: 'EsykPsafhHUeN7jA9DGqBiGuBsTBaFynLDVVpE4jFXDg',
+  );
 }

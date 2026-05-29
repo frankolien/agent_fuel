@@ -56,6 +56,24 @@ class RiskProfileChanged extends OnboardingEvent {
   List<Object?> get props => [profile];
 }
 
+class CustomMaxPerTxChanged extends OnboardingEvent {
+  const CustomMaxPerTxChanged(this.usdc);
+  final double usdc;
+  @override
+  List<Object?> get props => [usdc];
+}
+
+class CustomMaxPerHourChanged extends OnboardingEvent {
+  const CustomMaxPerHourChanged(this.usdc);
+  final double usdc;
+  @override
+  List<Object?> get props => [usdc];
+}
+
 class OnboardingAuthorized extends OnboardingEvent {
   const OnboardingAuthorized();
+}
+
+class FundBalanceRequested extends OnboardingEvent {
+  const FundBalanceRequested();
 }

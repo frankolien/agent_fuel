@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 
+import '../../../../app/router.dart';
 import '../bloc/onboarding_bloc.dart';
 import '../bloc/onboarding_event.dart';
 import '../bloc/onboarding_state.dart';
@@ -22,13 +23,18 @@ class OnboardingPage extends StatelessWidget {
     return BlocProvider(
       create: (_) =>
           GetIt.I<OnboardingBloc>()..add(const OnboardingStarted()),
-      child: BlocBuilder<OnboardingBloc, OnboardingState>(
-        buildWhen: (a, b) => a.runtimeType != b.runtimeType,
-        builder: (_, state) => AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          child: _pageFor(state),
+      child: BlocListener<OnboardingBloc, OnboardingState>(
+        listenWhen: (_, b) => b is OnboardingComplete,
+        listener: (ctx, _) =>
+            ctx.router.replaceAll([const FleetRoute()]),
+        child: BlocBuilder<OnboardingBloc, OnboardingState>(
+          buildWhen: (a, b) => a.runtimeType != b.runtimeType,
+          builder: (_, state) => AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            child: _pageFor(state),
+          ),
         ),
       ),
     );
@@ -41,6 +47,8 @@ class OnboardingPage extends StatelessWidget {
     if (state is OnboardingFund) return const FundStep(key: ValueKey('fund'));
     if (state is OnboardingGuardrails) return const GuardrailsStep(key: ValueKey('guardrails'));
     if (state is OnboardingSuccess) return const SuccessStep(key: ValueKey('success'));
+    // OnboardingComplete renders nothing — the BlocListener replaces the
+    // route on the same frame.
     return const SizedBox.shrink();
   }
 }

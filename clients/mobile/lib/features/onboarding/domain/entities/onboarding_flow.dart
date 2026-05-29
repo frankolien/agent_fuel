@@ -2,7 +2,7 @@ import 'package:equatable/equatable.dart';
 
 enum AgentFramework { solanaAgentKit, elizaOs, goat, custom }
 
-enum RiskProfile { conservative, balanced, highThroughput }
+enum RiskProfile { conservative, balanced, highThroughput, custom }
 
 class OnboardingFlow extends Equatable {
   const OnboardingFlow({
@@ -11,6 +11,8 @@ class OnboardingFlow extends Equatable {
     this.framework = AgentFramework.solanaAgentKit,
     this.depositUsdc = 500,
     this.riskProfile = RiskProfile.balanced,
+    this.customMaxPerTxUsdc = 10,
+    this.customMaxPerHourUsdc = 100,
   });
 
   final String? ownerPubkey;
@@ -18,9 +20,19 @@ class OnboardingFlow extends Equatable {
   final AgentFramework framework;
   final int depositUsdc;
   final RiskProfile riskProfile;
+  final double customMaxPerTxUsdc;
+  final double customMaxPerHourUsdc;
 
   bool get walletConnected => ownerPubkey != null;
   bool get handleValid => RegExp(r'^[a-z0-9-]{2,32}$').hasMatch(handle);
+
+  double get effectiveMaxPerTxUsdc => riskProfile == RiskProfile.custom
+      ? customMaxPerTxUsdc
+      : PolicyPreset.presets[riskProfile]!.maxPerTxUsdc.toDouble();
+
+  double get effectiveMaxPerHourUsdc => riskProfile == RiskProfile.custom
+      ? customMaxPerHourUsdc
+      : PolicyPreset.presets[riskProfile]!.maxPerHourUsdc.toDouble();
 
   OnboardingFlow copyWith({
     String? ownerPubkey,
@@ -28,6 +40,8 @@ class OnboardingFlow extends Equatable {
     AgentFramework? framework,
     int? depositUsdc,
     RiskProfile? riskProfile,
+    double? customMaxPerTxUsdc,
+    double? customMaxPerHourUsdc,
   }) =>
       OnboardingFlow(
         ownerPubkey: ownerPubkey ?? this.ownerPubkey,
@@ -35,6 +49,8 @@ class OnboardingFlow extends Equatable {
         framework: framework ?? this.framework,
         depositUsdc: depositUsdc ?? this.depositUsdc,
         riskProfile: riskProfile ?? this.riskProfile,
+        customMaxPerTxUsdc: customMaxPerTxUsdc ?? this.customMaxPerTxUsdc,
+        customMaxPerHourUsdc: customMaxPerHourUsdc ?? this.customMaxPerHourUsdc,
       );
 
   @override
@@ -44,6 +60,8 @@ class OnboardingFlow extends Equatable {
         framework,
         depositUsdc,
         riskProfile,
+        customMaxPerTxUsdc,
+        customMaxPerHourUsdc,
       ];
 }
 
@@ -77,6 +95,12 @@ class PolicyPreset {
       maxPerHourUsdc: 1200,
       title: 'High throughput',
       blurb: 'Generous caps for market-makers and settlement bots.',
+    ),
+    RiskProfile.custom: PolicyPreset(
+      maxPerTxUsdc: 0,
+      maxPerHourUsdc: 0,
+      title: 'Custom',
+      blurb: 'Set your own per-tx and hourly limits.',
     ),
   };
 }

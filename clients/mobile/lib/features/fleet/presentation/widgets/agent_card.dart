@@ -2,145 +2,170 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/theme.dart';
 import '../../domain/entities/agent.dart';
+import 'score_badge.dart';
 
+/// Compact agent row matching the design's `m-arow`: 46px reputation ring,
+/// name + label, right-aligned $remaining + score delta, then a 4px gauge
+/// that spans the inner two grid columns.
 class AgentCardView extends StatelessWidget {
-  const AgentCardView({super.key, required this.agent});
+  const AgentCardView({
+    super.key,
+    required this.agent,
+    this.scoreDelta,
+  });
+
   final Agent agent;
+  final int? scoreDelta;
 
   @override
   Widget build(BuildContext context) {
     final mono = Theme.of(context).extension<AFTypography>()!.mono;
-    final scoreText = agent.isScored
-        ? agent.score.toString().padLeft(3, '0')
-        : '—';
-    final scoreColor = agent.isScored ? AFColors.mint : AFColors.muted;
     final fraction = (agent.score / 1000).clamp(0.0, 1.0);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _Header(pubkey: agent.pubkey, mono: mono),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  scoreText,
-                  style: mono.headlineMedium?.copyWith(
-                    color: scoreColor,
-                    fontWeight: FontWeight.w500,
-                    height: 1,
-                  ),
+    final value = _fmtUsd(agent.totalVolumeUsdc / 1000000);
+    final scoreStatus = !agent.isScored
+        ? RepRingStatus.frozen
+        : agent.activeNegativeFeedbackCount > 0
+            ? RepRingStatus.warning
+            : RepRingStatus.active;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: AFColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AFColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              RepRing(score: agent.score, status: scoreStatus),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _shortPubkey(agent.pubkey, 4),
+                      style: mono.bodyLarge?.copyWith(
+                        color: AFColors.fg,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 16,
+                        letterSpacing: -0.16,
+                        height: 1.1,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_fmtCompact(agent.totalTransactions)} tx · '
+                      '${_fmtCompact(agent.servicesUsed)} services',
+                      style: const TextStyle(
+                        color: AFColors.muted,
+                        fontSize: 12.5,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    '/ 1000',
-                    style: mono.bodySmall?.copyWith(color: AFColors.muted),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '\$$value',
+                    style: mono.bodyLarge?.copyWith(
+                      color: AFColors.fg,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      letterSpacing: -0.32,
+                      height: 1.1,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _ProgressBar(fraction: fraction, scored: agent.isScored),
-            const SizedBox(height: 14),
-            const Divider(color: AFColors.line2, height: 1),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _Stat(label: 'TX', value: _fmtCompact(agent.totalTransactions), mono: mono),
-                _Stat(label: 'VOLUME', value: '\$${_fmtUsdc(agent.totalVolumeUsdc)}', mono: mono),
-                _Stat(label: 'STREAK', value: _fmtCompact(agent.consecutiveSuccess), mono: mono),
-              ],
-            ),
-          ],
-        ),
+                  const SizedBox(height: 3),
+                  _DeltaText(delta: scoreDelta),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.only(left: 60),
+            child: _ThinGauge(fraction: fraction, scored: agent.isScored),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.pubkey, required this.mono});
-  final String pubkey;
-  final TextTheme mono;
+class _DeltaText extends StatelessWidget {
+  const _DeltaText({required this.delta});
+  final int? delta;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            _shortPubkey(pubkey, 6),
-            style: mono.bodyMedium?.copyWith(color: AFColors.fg),
-            overflow: TextOverflow.ellipsis,
-          ),
+    if (delta == null || delta == 0) {
+      return const Text(
+        '· —',
+        style: TextStyle(
+          color: AFColors.muted2,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
         ),
-        const Icon(Icons.chevron_right, color: AFColors.muted, size: 18),
-      ],
+      );
+    }
+    final up = delta! > 0;
+    return Text(
+      '${up ? '▲ +' : '▼ '}${delta!.abs()}',
+      style: TextStyle(
+        color: up ? AFColors.mint : AFColors.danger,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }
 
-class _ProgressBar extends StatelessWidget {
-  const _ProgressBar({required this.fraction, required this.scored});
+class _ThinGauge extends StatelessWidget {
+  const _ThinGauge({required this.fraction, required this.scored});
   final double fraction;
   final bool scored;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(2),
+      borderRadius: BorderRadius.circular(100),
       child: Container(
         height: 4,
-        color: AFColors.surface2,
+        color: AFColors.surface3,
         child: Align(
           alignment: Alignment.centerLeft,
           child: FractionallySizedBox(
             widthFactor: fraction,
-            child: Container(
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                color: scored ? AFColors.mint : AFColors.surface3,
+                gradient: scored
+                    ? const LinearGradient(
+                        colors: [AFColors.mintDim, AFColors.mint],
+                      )
+                    : null,
+                color: scored ? null : AFColors.muted,
                 boxShadow: scored
-                    ? const [BoxShadow(color: AFColors.mintGlow, blurRadius: 10)]
+                    ? const [
+                        BoxShadow(color: AFColors.mintGlow, blurRadius: 10),
+                      ]
                     : null,
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value, required this.mono});
-  final String label;
-  final String value;
-  final TextTheme mono;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: mono.labelSmall?.copyWith(
-              color: AFColors.muted,
-              letterSpacing: 0.6,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: mono.bodyMedium?.copyWith(color: AFColors.fg2),
-          ),
-        ],
       ),
     );
   }
@@ -155,8 +180,9 @@ String _fmtCompact(int n) {
   return n.toString();
 }
 
-String _fmtUsdc(int micro) {
-  final usd = micro / 1000000;
+String _fmtUsd(double usd) {
+  if (usd == 0) return '0.00';
+  if (usd >= 1000000) return '${(usd / 1000000).toStringAsFixed(2)}M';
   if (usd >= 1000) return '${(usd / 1000).toStringAsFixed(2)}K';
   return usd.toStringAsFixed(2);
 }

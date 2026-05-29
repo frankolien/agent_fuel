@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter/services.dart' show PlatformException;
+import 'package:solana/base58.dart' show base58encode;
 import 'package:solana/solana.dart' show Ed25519HDPublicKey;
 import 'package:solana_mobile_client/solana_mobile_client.dart';
 
@@ -69,6 +70,52 @@ class MwaDataSource {
     } catch (e) {
       throw WalletException(
         'Sign-in signature failed: $e',
+        kind: WalletExceptionKind.protocol,
+      );
+    } finally {
+      await _safeClose(session);
+    }
+  }
+
+  Future<String> signAndSendTransaction({
+    required String authToken,
+    required Uint8List transactionBytes,
+  }) async {
+    _ensureAndroid();
+    LocalAssociationScenario? session;
+    try {
+      session = await LocalAssociationScenario.create();
+      session.startActivityForResult(null).ignore();
+      final client = await session.start();
+      final reauth = await client.reauthorize(
+        identityUri: Uri.parse(AppEnv.identityUri),
+        iconUri: _iconUri,
+        identityName: AppEnv.identityName,
+        authToken: authToken,
+      );
+      if (reauth == null) {
+        throw WalletException(
+          'Wallet declined to reauthorize. Disconnect and reconnect.',
+          kind: WalletExceptionKind.userCancelled,
+        );
+      }
+      final result = await client.signAndSendTransactions(
+        transactions: [transactionBytes],
+      );
+      if (result.signatures.isEmpty) {
+        throw WalletException(
+          'Wallet declined to send the transaction.',
+          kind: WalletExceptionKind.userCancelled,
+        );
+      }
+      return base58encode(result.signatures.first);
+    } on PlatformException catch (e) {
+      throw _classifyPlatformException(e);
+    } on WalletException {
+      rethrow;
+    } catch (e) {
+      throw WalletException(
+        'Transaction failed: $e',
         kind: WalletExceptionKind.protocol,
       );
     } finally {

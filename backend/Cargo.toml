@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 description = "Agent Fuel backend — Actix-Web indexer + REST/WS API for the reputation and credit-vault programs."
+default-run = "agent_fuel_backend"
 
 [[bin]]
 name = "agent_fuel_backend"
