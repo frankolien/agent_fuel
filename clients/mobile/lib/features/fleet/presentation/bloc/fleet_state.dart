@@ -27,8 +27,6 @@ class FleetEmpty extends FleetState {
   const FleetEmpty();
 }
 
-/// Backend rejected the request because the caller isn't signed in. UI
-/// renders a "connect wallet" gate.
 class FleetWalletRequired extends FleetState {
   const FleetWalletRequired();
 }

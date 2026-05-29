@@ -46,6 +46,7 @@ class _FleetView extends StatelessWidget {
           if (state is FleetWalletRequired) {
             return const _WalletGate();
           }
+
           if (state is FleetError) {
             return _ErrorView(
               message: state.message,

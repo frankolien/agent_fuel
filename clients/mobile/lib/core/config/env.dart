@@ -1,14 +1,16 @@
-/// Compile-time defaults — overridable via --dart-define for staging/devnet
-/// builds. Production values point at the live Agent Fuel backend on Railway.
 class AppEnv {
+  // Default to Railway's raw subdomain rather than the custom domain — DNS
+  // for `api.agentfuel.online` can take a while to propagate to every
+  // device's system resolver, and Flutter's HTTP stack hard-fails on it.
+  // Override with --dart-define once the CNAME is stable on the target.
   static const apiBase = String.fromEnvironment(
     'AGENT_FUEL_API_BASE',
-    defaultValue: 'https://api.agentfuel.online',
+    defaultValue: 'https://jx0m4jn1.up.railway.app',
   );
 
   static const wsBase = String.fromEnvironment(
     'AGENT_FUEL_WS_BASE',
-    defaultValue: 'wss://api.agentfuel.online',
+    defaultValue: 'wss://jx0m4jn1.up.railway.app',
   );
 
   static const rpcUrl = String.fromEnvironment(
@@ -22,21 +24,19 @@ class AppEnv {
   );
 
   static const identityName = 'Agent Fuel';
-  static const identityUri = 'https://agentfuel.online';
 
-  /// Brand mark wallets display next to "Agent Fuel" on the auth sheet.
-  /// Some wallets (Solflare) fetch this server-side before showing the
-  /// sheet — a 404 takes the whole flow down — so it must resolve to a
-  /// real PNG. We host it from the repo via GitHub's raw CDN until the
-  /// agentfuel.online web app is deployed; override via --dart-define
-  /// when we ship a permanent URL.
-  static const identityIconUri = String.fromEnvironment(
-    'AGENT_FUEL_IDENTITY_ICON_URI',
-    defaultValue:
-        'https://raw.githubusercontent.com/frankolien/agent_fuel/main/assets/brand/icon.png',
+  static const identityUri = String.fromEnvironment(
+    'AGENT_FUEL_IDENTITY_URI',
+    defaultValue: 'https://github.com/frankolien/agent_fuel',
   );
 
-  /// Custom scheme for Phantom deep-link callbacks on iOS and shareable
-  /// vault URLs. Configured in Info.plist + AndroidManifest.xml.
+  // Relative URI matches the canonical Espresso Cash example — wallets just
+  // display it as a label without trying to fetch, sidestepping every
+  // URL-validation footgun. Override with a full PNG URL when one exists.
+  static const identityIconUri = String.fromEnvironment(
+    'AGENT_FUEL_IDENTITY_ICON_URI',
+    defaultValue: 'favicon.ico',
+  );
+
   static const deepLinkScheme = 'agentfuel';
 }

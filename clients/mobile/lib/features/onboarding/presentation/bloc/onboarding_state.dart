@@ -2,7 +2,6 @@ import 'package:equatable/equatable.dart';
 
 import '../../domain/entities/onboarding_flow.dart';
 
-/// Step index into the 6-page flow. Welcome is 0; success is 5.
 enum OnboardingStep {
   welcome,
   wallet,
@@ -12,9 +11,6 @@ enum OnboardingStep {
   success,
 }
 
-/// Multi-variant state — every screen of the wizard maps 1:1 to a subclass.
-/// The flow snapshot rides on every state so the UI can read what's been
-/// captured so far without subscribing to two streams.
 abstract class OnboardingState extends Equatable {
   const OnboardingState({required this.flow});
   final OnboardingFlow flow;
@@ -39,35 +35,20 @@ class OnboardingWelcome extends OnboardingState {
 class OnboardingWallet extends OnboardingState {
   const OnboardingWallet({
     required super.flow,
-    this.connecting = false,
+    this.busy = false,
     this.error,
     this.authToken,
   });
 
-  final bool connecting;
+  final bool busy;
   final String? error;
   final String? authToken;
 
   @override
   OnboardingStep get step => OnboardingStep.wallet;
 
-  OnboardingWallet copyWith({
-    OnboardingFlow? flow,
-    bool? connecting,
-    Object? error = _sentinel,
-    Object? authToken = _sentinel,
-  }) =>
-      OnboardingWallet(
-        flow: flow ?? this.flow,
-        connecting: connecting ?? this.connecting,
-        error: identical(error, _sentinel) ? this.error : error as String?,
-        authToken: identical(authToken, _sentinel)
-            ? this.authToken
-            : authToken as String?,
-      );
-
   @override
-  List<Object?> get props => [flow, connecting, error, authToken];
+  List<Object?> get props => [flow, busy, error, authToken];
 }
 
 class OnboardingIdentity extends OnboardingState {
@@ -113,15 +94,10 @@ class OnboardingGuardrails extends OnboardingState {
   @override
   OnboardingStep get step => OnboardingStep.guardrails;
 
-  OnboardingGuardrails copyWith({
-    OnboardingFlow? flow,
-    bool? submitting,
-    Object? error = _sentinel,
-  }) =>
-      OnboardingGuardrails(
+  OnboardingGuardrails copyWith({OnboardingFlow? flow}) => OnboardingGuardrails(
         flow: flow ?? this.flow,
-        submitting: submitting ?? this.submitting,
-        error: identical(error, _sentinel) ? this.error : error as String?,
+        submitting: submitting,
+        error: error,
         authToken: authToken,
       );
 
@@ -135,5 +111,3 @@ class OnboardingSuccess extends OnboardingState {
   @override
   OnboardingStep get step => OnboardingStep.success;
 }
-
-const _sentinel = Object();

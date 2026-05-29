@@ -4,8 +4,6 @@ enum AgentFramework { solanaAgentKit, elizaOs, goat, custom }
 
 enum RiskProfile { conservative, balanced, highThroughput }
 
-/// Domain-level snapshot of the onboarding flow. Lives in the bloc state
-/// across steps; turned into chain calls by the use cases that 4.1c lands.
 class OnboardingFlow extends Equatable {
   const OnboardingFlow({
     this.ownerPubkey,
@@ -39,13 +37,6 @@ class OnboardingFlow extends Equatable {
         riskProfile: riskProfile ?? this.riskProfile,
       );
 
-  OnboardingFlow disconnect() => OnboardingFlow(
-        handle: handle,
-        framework: framework,
-        depositUsdc: depositUsdc,
-        riskProfile: riskProfile,
-      );
-
   @override
   List<Object?> get props => [
         ownerPubkey,
@@ -56,9 +47,6 @@ class OnboardingFlow extends Equatable {
       ];
 }
 
-/// Limits derived from a `RiskProfile`. Mirrors the on-chain `update_policy`
-/// micro-USDC encoding so this object can be fed straight into the policy
-/// instruction in 4.1c.
 class PolicyPreset {
   const PolicyPreset({
     required this.maxPerTxUsdc,

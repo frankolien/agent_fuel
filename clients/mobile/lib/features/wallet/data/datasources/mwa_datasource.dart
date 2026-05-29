@@ -1,6 +1,6 @@
 import 'dart:io' show Platform;
+import 'dart:typed_data' show Uint8List;
 
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:solana/solana.dart' show Ed25519HDPublicKey;
 import 'package:solana_mobile_client/solana_mobile_client.dart';
@@ -27,13 +27,57 @@ class MwaDataSource {
   Future<MwaResult> reauthorize(String authToken) =>
       _runSession((client) => _reauthorize(client, authToken));
 
-  Future<void> deauthorize(String authToken) async {
-    if (!Platform.isAndroid) {
-      throw WalletException(
-        'Mobile Wallet Adapter is Android-only',
-        kind: WalletExceptionKind.unsupportedPlatform,
+  Future<Uint8List> signMessage({
+    required String authToken,
+    required Uint8List message,
+    required Uint8List addressBytes,
+  }) async {
+    _ensureAndroid();
+    LocalAssociationScenario? session;
+    try {
+      session = await LocalAssociationScenario.create();
+      session.startActivityForResult(null).ignore();
+      final client = await session.start();
+      final reauth = await client.reauthorize(
+        identityUri: Uri.parse(AppEnv.identityUri),
+        iconUri: _iconUri,
+        identityName: AppEnv.identityName,
+        authToken: authToken,
       );
+      if (reauth == null) {
+        throw WalletException(
+          'Wallet declined to reauthorize. Disconnect and reconnect.',
+          kind: WalletExceptionKind.userCancelled,
+        );
+      }
+      final result = await client.signMessages(
+        messages: [message],
+        addresses: [addressBytes],
+      );
+      if (result.signedMessages.isEmpty ||
+          result.signedMessages.first.signatures.isEmpty) {
+        throw WalletException(
+          'Wallet declined to sign the sign-in message.',
+          kind: WalletExceptionKind.userCancelled,
+        );
+      }
+      return result.signedMessages.first.signatures.first;
+    } on PlatformException catch (e) {
+      throw _classifyPlatformException(e);
+    } on WalletException {
+      rethrow;
+    } catch (e) {
+      throw WalletException(
+        'Sign-in signature failed: $e',
+        kind: WalletExceptionKind.protocol,
+      );
+    } finally {
+      await _safeClose(session);
     }
+  }
+
+  Future<void> deauthorize(String authToken) async {
+    _ensureAndroid();
     await _runSession((client) async {
       await client.deauthorize(authToken: authToken);
       return _emptyResult;
@@ -43,64 +87,54 @@ class MwaDataSource {
   Future<MwaResult> _runSession(
     Future<MwaResult> Function(MobileWalletAdapterClient client) op,
   ) async {
-    if (!Platform.isAndroid) {
-      throw WalletException(
-        'Mobile Wallet Adapter is Android-only',
-        kind: WalletExceptionKind.unsupportedPlatform,
-      );
-    }
+    _ensureAndroid();
 
-    // Authoritative probe: asks PackageManager whether any installed app
-    // can handle the MWA association intent. This is the only reliable way
-    // to distinguish "no MWA wallet" from "session timed out for another
-    // reason" — without it, every PlatformException looks the same.
-    final available = await LocalAssociationScenario.isAvailable();
-    if (!available) {
+    // PackageManager probe — distinguishes "no MWA wallet installed" from a
+    // generic session failure. Without it every PlatformException looks the
+    // same to the caller.
+    if (!await LocalAssociationScenario.isAvailable()) {
       throw WalletException(
         'No Mobile Wallet Adapter wallet found. Install Phantom, Solflare, '
-        'Backpack, or Seeker\'s Seed Vault Wallet — and make sure it\'s '
-        'updated to a version that supports MWA.',
+        'Backpack, or Seeker\'s Seed Vault Wallet.',
         kind: WalletExceptionKind.noWalletInstalled,
       );
     }
 
     LocalAssociationScenario? session;
     try {
-      debugPrint('[MWA] creating session');
       session = await LocalAssociationScenario.create();
-      // Fire the solana-wallet:// intent. Android shows its chooser; the
-      // selected wallet binds back on `session.start()`.
-      debugPrint('[MWA] dispatching association intent');
       session.startActivityForResult(null).ignore();
-      debugPrint('[MWA] awaiting wallet binding');
       final client = await session.start();
-      debugPrint('[MWA] bound — running op');
-      final result = await op(client);
-      debugPrint('[MWA] op completed');
-      return result;
-    } on PlatformException catch (e, st) {
-      debugPrint('[MWA] PlatformException code=${e.code} message=${e.message}');
-      debugPrint('[MWA] details=${e.details}');
-      debugPrint('[MWA] stack: $st');
+      return await op(client);
+    } on PlatformException catch (e) {
       throw _classifyPlatformException(e);
     } on WalletException {
       rethrow;
-    } catch (e, st) {
-      debugPrint('[MWA] generic error type=${e.runtimeType}: $e');
-      debugPrint('[MWA] stack: $st');
+    } catch (e) {
       throw WalletException(
         'Wallet connect failed: $e',
         kind: WalletExceptionKind.protocol,
       );
     } finally {
-      // Closing a session the wallet already tore down throws on some
-      // wallets — swallow so we don't mask the original exception (or the
-      // success) with a teardown error.
-      try {
-        await session?.close();
-      } catch (e) {
-        debugPrint('[MWA] session.close() ignored: $e');
-      }
+      await _safeClose(session);
+    }
+  }
+
+  void _ensureAndroid() {
+    if (!Platform.isAndroid) {
+      throw WalletException(
+        'Mobile Wallet Adapter is Android-only',
+        kind: WalletExceptionKind.unsupportedPlatform,
+      );
+    }
+  }
+
+  Future<void> _safeClose(LocalAssociationScenario? session) async {
+    try {
+      await session?.close();
+    } catch (_) {
+      // Some wallets tear down the session themselves; closing a torn-down
+      // session throws. Swallow so we don't mask the real outcome.
     }
   }
 
@@ -108,19 +142,14 @@ class MwaDataSource {
     final msg = (e.message ?? '').toLowerCase();
     final code = e.code.toLowerCase();
 
-    // Wallet ack'd the auth request and declined. Treat as user-driven.
     if (code.contains('cancel') ||
         msg.contains('cancel') ||
         msg.contains('declin')) {
       return WalletException(
-        'Connection cancelled. Tap Connect wallet to try again.',
+        'Connection cancelled. Tap again to retry.',
         kind: WalletExceptionKind.userCancelled,
       );
     }
-
-    // session.start() blocks on Scenario.DEFAULT_CLIENT_TIMEOUT_MS waiting
-    // for the wallet to bind back — when nothing happens (chooser dismissed,
-    // wallet crashed) this surfaces as a timeout/IO error.
     if (code.contains('timeout') ||
         msg.contains('timeout') ||
         msg.contains('timed out') ||
@@ -131,7 +160,6 @@ class MwaDataSource {
         kind: WalletExceptionKind.protocol,
       );
     }
-
     if (code.contains('activitynotfound') ||
         msg.contains('no activity') ||
         msg.contains('no app')) {
@@ -140,7 +168,6 @@ class MwaDataSource {
         kind: WalletExceptionKind.noWalletInstalled,
       );
     }
-
     return WalletException(
       'Wallet connect failed (${e.code}): ${e.message ?? 'unknown error'}',
       kind: WalletExceptionKind.protocol,
@@ -159,8 +186,8 @@ class MwaDataSource {
     );
     if (result == null) {
       throw WalletException(
-        'Wallet declined to authorize. Try a different wallet, or make '
-        'sure the wallet you tapped has a Solana account set up.',
+        'Wallet declined to authorize. Try a different wallet, or make sure '
+        'the wallet you tapped has a Solana account set up.',
         kind: WalletExceptionKind.userCancelled,
       );
     }

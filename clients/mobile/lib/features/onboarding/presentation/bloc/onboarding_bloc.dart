@@ -1,27 +1,21 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../../core/usecase/usecase.dart';
-import '../../../wallet/domain/repositories/wallet_repository.dart';
-import '../../../wallet/domain/usecases/connect_wallet.dart';
+import '../../../../core/error/exceptions.dart';
+import '../../../auth/domain/usecases/sign_in_with_solana.dart';
+import '../../../wallet/data/repositories/wallet_repository.dart';
+import '../../../wallet/domain/entities/connected_wallet.dart';
 import '../../domain/entities/onboarding_flow.dart';
 import 'onboarding_event.dart';
 import 'onboarding_state.dart';
 
-/// Drives the 6-step onboarding wizard. Each step is its own state class
-/// (Solflare-style); the bloc transitions between them as the user advances.
-///
-/// Side effects still stubbed for 4.1a:
-///   - Final deposit / update_policy / initialize_agent on guardrails step.
-/// Wallet connect is real (Mobile Wallet Adapter on Android).
 class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
-  OnboardingBloc(this._connectWallet, this._walletRepository)
+  OnboardingBloc(this._wallet, this._signIn)
       : super(const OnboardingWelcome(flow: OnboardingFlow())) {
     on<OnboardingStarted>(_onStarted);
     on<OnboardingNext>(_onNext);
     on<OnboardingBack>(_onBack);
     on<OnboardingSkipped>(_onSkipped);
-    on<WalletConnectRequested>(_onConnectRequested);
-    on<WalletDisconnectRequested>(_onDisconnectRequested);
+    on<WalletSignInRequested>(_onSignInRequested);
     on<HandleChanged>(_onHandleChanged);
     on<FrameworkChanged>(_onFrameworkChanged);
     on<DepositChanged>(_onDepositChanged);
@@ -29,16 +23,14 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     on<OnboardingAuthorized>(_onAuthorized);
   }
 
-  final ConnectWallet _connectWallet;
-  final WalletRepository _walletRepository;
-
-  // ── Wizard navigation ────────────────────────────────────────────────────
+  final WalletRepository _wallet;
+  final SignInWithSolana _signIn;
 
   Future<void> _onStarted(
     OnboardingStarted _,
     Emitter<OnboardingState> emit,
   ) async {
-    final cached = await _walletRepository.cachedConnection();
+    final cached = await _wallet.cachedConnection();
     if (cached != null) {
       emit(OnboardingWelcome(
         flow: state.flow.copyWith(ownerPubkey: cached.pubkeyBase58),
@@ -58,15 +50,11 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     emit(OnboardingSuccess(flow: state.flow));
   }
 
-  /// Build the state variant for a given step index, carrying the current
-  /// flow + auth token through. Used by Next/Back so we don't have to
-  /// branch over every (from, to) pair.
   OnboardingState _stateAt(int index) {
     final clamped = index.clamp(0, OnboardingStep.values.length - 1);
-    final next = OnboardingStep.values[clamped];
     final flow = state.flow;
     final token = _currentAuthToken();
-    switch (next) {
+    switch (OnboardingStep.values[clamped]) {
       case OnboardingStep.welcome:
         return OnboardingWelcome(flow: flow);
       case OnboardingStep.wallet:
@@ -91,40 +79,53 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     return null;
   }
 
-  // ── Wallet ───────────────────────────────────────────────────────────────
-
-  Future<void> _onConnectRequested(
-    WalletConnectRequested _,
+  Future<void> _onSignInRequested(
+    WalletSignInRequested _,
     Emitter<OnboardingState> emit,
   ) async {
     final cur = state;
     if (cur is! OnboardingWallet) return;
-    emit(cur.copyWith(connecting: true, error: null));
-    final result = await _connectWallet(const NoParams());
-    result.fold(
-      (failure) => emit(cur.copyWith(connecting: false, error: failure.message)),
-      (wallet) => emit(OnboardingWallet(
+    emit(OnboardingWallet(flow: cur.flow, busy: true, authToken: cur.authToken));
+
+    try {
+      // Reuse this session's MWA authorization if we already have it — a
+      // retry after a failed sign-message shouldn't re-prompt connect.
+      final ConnectedWallet wallet = (cur.authToken != null && cur.flow.ownerPubkey != null)
+          ? ConnectedWallet(
+              pubkeyBase58: cur.flow.ownerPubkey!,
+              authToken: cur.authToken!,
+            )
+          : await _wallet.connect();
+
+      await _signIn(
+        pubkeyBase58: wallet.pubkeyBase58,
+        walletAuthToken: wallet.authToken,
+      );
+
+      emit(OnboardingIdentity(
         flow: cur.flow.copyWith(ownerPubkey: wallet.pubkeyBase58),
-        connecting: false,
         authToken: wallet.authToken,
-      )),
-    );
-  }
-
-  Future<void> _onDisconnectRequested(
-    WalletDisconnectRequested _,
-    Emitter<OnboardingState> emit,
-  ) async {
-    final cur = state;
-    if (cur is! OnboardingWallet) return;
-    final token = cur.authToken;
-    if (token != null) {
-      await _walletRepository.disconnect(token);
+      ));
+    } on WalletException catch (e) {
+      emit(OnboardingWallet(
+        flow: cur.flow,
+        error: e.message,
+        authToken: cur.authToken,
+      ));
+    } on ServerException catch (e) {
+      emit(OnboardingWallet(
+        flow: cur.flow,
+        error: e.message,
+        authToken: cur.authToken,
+      ));
+    } on NetworkException catch (e) {
+      emit(OnboardingWallet(
+        flow: cur.flow,
+        error: e.message,
+        authToken: cur.authToken,
+      ));
     }
-    emit(OnboardingWallet(flow: cur.flow.disconnect()));
   }
-
-  // ── Field edits — keep within the current step variant ──────────────────
 
   void _onHandleChanged(HandleChanged e, Emitter<OnboardingState> emit) {
     final cur = state;
@@ -153,17 +154,17 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     emit(cur.copyWith(flow: cur.flow.copyWith(riskProfile: e.profile)));
   }
 
-  // ── Final authorize on the guardrails step ──────────────────────────────
-
   Future<void> _onAuthorized(
     OnboardingAuthorized _,
     Emitter<OnboardingState> emit,
   ) async {
     final cur = state;
     if (cur is! OnboardingGuardrails) return;
-    emit(cur.copyWith(submitting: true));
-    // 4.1c will: local_auth biometric prompt → deposit() → update_policy()
-    // → initialize_agent() → emit success.
+    emit(OnboardingGuardrails(
+      flow: cur.flow,
+      submitting: true,
+      authToken: cur.authToken,
+    ));
     await Future<void>.delayed(const Duration(milliseconds: 600));
     emit(OnboardingSuccess(flow: cur.flow));
   }

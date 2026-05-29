@@ -5,19 +5,14 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/env.dart';
 
-/// Subscribes to a single Agent Fuel WebSocket channel and pushes a callback
-/// every time the backend emits an event for it.
+/// Subscribes to a single Agent Fuel WebSocket channel and notifies via
+/// [onChange] each time the backend pushes a frame. Frames are opaque — the
+/// caller re-fetches via HTTP to read the authoritative state.
 ///
-/// Mirrors Solflare's BalanceWsService design:
-///   - Single subscription at a time. Caller switches targets via [watch].
-///   - Exponential reconnect backoff (1s → 2s → 4s → 8s → 16s → 30s cap).
-///   - Lifecycle-aware: drops the socket on background, reopens on resume.
-///   - Silent failures — this is a *push hint* layered over HTTP refresh,
-///     not an authoritative data source.
-///
-/// The backend pushes opaque JSON frames; consumers don't decode them — they
-/// re-fetch via HTTP on every notification. Decoding here would couple the
-/// service to event schemas that change as the protocol evolves.
+/// Behavior:
+///   - One subscription at a time. [watch] switches targets.
+///   - Reconnect backoff: 1, 2, 4, 8, 16, 30 s.
+///   - Drops the socket on background, reopens on resume.
 class AgentFuelWsService with WidgetsBindingObserver {
   AgentFuelWsService({required this.onChange}) {
     WidgetsBinding.instance.addObserver(this);
@@ -34,8 +29,6 @@ class AgentFuelWsService with WidgetsBindingObserver {
   int _reconnectAttempts = 0;
   bool _stopped = false;
 
-  /// Begin watching [path] (e.g. `/ws/agents/<pubkey>`). No-op if already
-  /// watching the same path; switches target if different.
   Future<void> watch(String path) async {
     if (_currentPath == path && _channel != null) return;
     _stopped = false;
@@ -44,21 +37,17 @@ class AgentFuelWsService with WidgetsBindingObserver {
     _connect();
   }
 
-  /// Stop watching and close the socket. After this the service won't
-  /// auto-reconnect on lifecycle events until [watch] is called again.
   Future<void> stop() async {
     _stopped = true;
     _currentPath = null;
     await _disconnect();
   }
 
-  /// Full teardown, including the lifecycle observer. Call on bloc.close.
   Future<void> dispose() async {
     WidgetsBinding.instance.removeObserver(this);
     await stop();
   }
 
-  /// Force a reconnect (e.g. network switch, app resumed from background).
   Future<void> reconnect() async {
     if (_currentPath == null) return;
     await _disconnect();
@@ -100,7 +89,6 @@ class AgentFuelWsService with WidgetsBindingObserver {
 
       _sub = channel.stream.listen(
         (_) {
-          // Every frame is a push hint — refetch via HTTP.
           if (!_stopped) onChange();
         },
         onError: (Object _) => _scheduleReconnect(),
@@ -108,7 +96,7 @@ class AgentFuelWsService with WidgetsBindingObserver {
         cancelOnError: true,
       );
 
-      // Backend closes idle sockets after 90s — ping every 30s.
+      // Backend closes idle sockets after 90 s.
       _pingTimer?.cancel();
       _pingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
         try {

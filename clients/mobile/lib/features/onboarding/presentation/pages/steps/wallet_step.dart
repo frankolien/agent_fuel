@@ -14,24 +14,19 @@ class WalletStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<OnboardingBloc>().state;
     if (state is! OnboardingWallet) return const SizedBox.shrink();
-    final flow = state.flow;
-    final ctaLabel = flow.walletConnected
-        ? 'Continue'
-        : state.connecting
-            ? 'Connecting…'
-            : 'Connect wallet';
-    final ctaEnabled = !state.connecting;
+    final retry = state.error != null;
     return OnboardingScaffold(
       cta: OnboardingCta(
-        label: ctaLabel,
-        onPressed: !ctaEnabled
+        label: state.busy
+            ? 'Signing in…'
+            : retry
+                ? 'Try again'
+                : 'Sign in with Solana',
+        onPressed: state.busy
             ? null
-            : flow.walletConnected
-                ? () =>
-                    context.read<OnboardingBloc>().add(const OnboardingNext())
-                : () => context
-                    .read<OnboardingBloc>()
-                    .add(const WalletConnectRequested()),
+            : () => context
+                .read<OnboardingBloc>()
+                .add(const WalletSignInRequested()),
       ),
       child: const _WalletBody(),
     );
@@ -45,24 +40,20 @@ class _WalletBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<OnboardingBloc>().state;
     if (state is! OnboardingWallet) return const SizedBox.shrink();
-    final flow = state.flow;
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        const StepEyebrow(index: 1, label: 'WALLET'),
+        const StepEyebrow(index: 1, label: 'SIGN IN'),
         const SizedBox(height: 14),
-        const StepTitle(lead: 'Connect your', accent: 'wallet'),
+        const StepTitle(lead: 'Sign in with', accent: 'Solana'),
         const SizedBox(height: 14),
         const StepSubtitle(
-          'Tap Connect — Android shows your installed wallets. Works with '
-          'Phantom, Solflare, Backpack, Seeker\'s Seed Vault, and any '
-          'MWA-compatible wallet.',
+          'Your wallet will open twice — once to authorize Agent Fuel, '
+          'then to sign a sign-in message. No gas, no transaction.',
         ),
         const SizedBox(height: 26),
-        if (flow.walletConnected)
-          _ConnectedCard(pubkey: flow.ownerPubkey!)
-        else if (state.connecting)
-          const _ConnectingTile()
+        if (state.busy)
+          const _SigningInTile()
         else
           const _IdleTile(),
         if (state.error != null) ...[
@@ -95,7 +86,8 @@ class _IdleTile extends StatelessWidget {
           SizedBox(width: 14),
           Expanded(
             child: Text(
-              'Tap Connect wallet to pick yours from Android\'s system chooser.',
+              'Tap below — Android shows your installed wallets, you pick one, '
+              'approve, and you\'re in.',
               style: TextStyle(color: AFColors.fg, height: 1.45),
             ),
           ),
@@ -105,8 +97,8 @@ class _IdleTile extends StatelessWidget {
   }
 }
 
-class _ConnectingTile extends StatelessWidget {
-  const _ConnectingTile();
+class _SigningInTile extends StatelessWidget {
+  const _SigningInTile();
 
   @override
   Widget build(BuildContext context) {
@@ -118,6 +110,7 @@ class _ConnectingTile extends StatelessWidget {
         border: Border.all(color: AFColors.line2),
       ),
       child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 18,
@@ -130,75 +123,10 @@ class _ConnectingTile extends StatelessWidget {
           SizedBox(width: 14),
           Expanded(
             child: Text(
-              'Waiting for the wallet to authorize…',
-              style: TextStyle(color: AFColors.muted),
+              'Check your wallet — approve the authorize sheet, then approve '
+              'the sign-in message that follows.',
+              style: TextStyle(color: AFColors.muted, height: 1.45),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConnectedCard extends StatelessWidget {
-  const _ConnectedCard({required this.pubkey});
-  final String pubkey;
-
-  String get _short {
-    if (pubkey.length <= 12) return pubkey;
-    return '${pubkey.substring(0, 6)}…${pubkey.substring(pubkey.length - 6)}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AFColors.surface2,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AFColors.mint, width: 1.5),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AFColors.mint.withValues(alpha: 0.18),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.check, color: AFColors.mint, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Wallet connected',
-                  style: TextStyle(
-                    color: AFColors.fg,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _short,
-                  style: const TextStyle(
-                    color: AFColors.muted,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: () => context
-                .read<OnboardingBloc>()
-                .add(const WalletDisconnectRequested()),
-            style: TextButton.styleFrom(foregroundColor: AFColors.muted),
-            child: const Text('Disconnect'),
           ),
         ],
       ),
@@ -220,6 +148,7 @@ class _ErrorBanner extends StatelessWidget {
         border: Border.all(color: AFColors.danger.withValues(alpha: 0.4)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.error_outline, color: AFColors.danger, size: 20),
           const SizedBox(width: 12),

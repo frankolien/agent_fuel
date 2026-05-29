@@ -95,9 +95,6 @@ class _WelcomeBody extends StatelessWidget {
   }
 }
 
-/// Agent Fuel mark — direct port of [`clients/web/src/components/Brand/Brand.tsx`].
-/// Same path, same proportions, same stroke style; just rendered with Flutter's
-/// `Canvas.drawPath` instead of an SVG.
 class _BrandMark extends StatelessWidget {
   const _BrandMark({required this.size});
   final double size;
@@ -112,7 +109,6 @@ class _BrandMark extends StatelessWidget {
 class _BrandPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    // Web SVG viewBox is 22×22. Scale every point.
     final s = size.width / 22;
     Offset p(double x, double y) => Offset(x * s, y * s);
 
@@ -123,7 +119,6 @@ class _BrandPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    // Outer triangle + inner notch — single closed path per the web source.
     final shape = Path()
       ..moveTo(p(4, 14).dx, p(4, 14).dy)
       ..lineTo(p(11, 4).dx, p(11, 4).dy)
@@ -134,10 +129,7 @@ class _BrandPainter extends CustomPainter {
       ..close();
     canvas.drawPath(shape, stroke);
 
-    // Underline.
     canvas.drawLine(p(7, 16), p(15, 16), stroke);
-
-    // Dot under the mark.
     canvas.drawLine(p(11, 18.5), p(11, 19.5), stroke);
   }
 

@@ -1,6 +1,5 @@
 import 'package:equatable/equatable.dart';
 
-/// Pure domain entity. No JSON parsing here — that's the data layer's job.
 class Agent extends Equatable {
   const Agent({
     required this.pubkey,
@@ -14,6 +13,20 @@ class Agent extends Equatable {
     required this.lastActiveSlot,
     required this.updatedAt,
   });
+
+  factory Agent.fromJson(Map<String, dynamic> json) => Agent(
+        pubkey: json['pubkey'] as String,
+        owner: json['owner'] as String,
+        score: (json['score'] as num).toInt(),
+        totalTransactions: (json['total_transactions'] as num).toInt(),
+        totalVolumeUsdc: (json['total_volume_usdc'] as num).toInt(),
+        servicesUsed: (json['services_used'] as num).toInt(),
+        consecutiveSuccess: (json['consecutive_success'] as num).toInt(),
+        activeNegativeFeedbackCount:
+            (json['active_negative_feedback_count'] as num).toInt(),
+        lastActiveSlot: (json['last_active_slot'] as num).toInt(),
+        updatedAt: DateTime.parse(json['updated_at'] as String),
+      );
 
   final String pubkey;
   final String owner;

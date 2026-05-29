@@ -1,6 +1,3 @@
-// Data-layer exception types — thrown by datasources, caught by repository
-// implementations and translated into `Failure` values.
-
 class ServerException implements Exception {
   ServerException(this.message, {this.statusCode});
   final String message;
@@ -17,11 +14,6 @@ class NotFoundException implements Exception {
 
 class NetworkException implements Exception {
   NetworkException([this.message = 'Network unavailable']);
-  final String message;
-}
-
-class CacheException implements Exception {
-  CacheException([this.message = 'Cache miss']);
   final String message;
 }
 

@@ -1,5 +1,12 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+typedef CachedWallet = ({
+  String authToken,
+  String pubkey,
+  String? walletUri,
+  String? accountLabel,
+});
+
 class AuthTokenStore {
   AuthTokenStore({FlutterSecureStorage? storage})
       : _storage = storage ?? const FlutterSecureStorage();
@@ -23,8 +30,7 @@ class AuthTokenStore {
     await _storage.write(key: _kAccountLabel, value: accountLabel);
   }
 
-  Future<({String authToken, String pubkey, String? walletUri, String? accountLabel})?>
-      read() async {
+  Future<CachedWallet?> read() async {
     final token = await _storage.read(key: _kAuthToken);
     final pubkey = await _storage.read(key: _kPubkey);
     if (token == null || pubkey == null) return null;

@@ -7,8 +7,6 @@ import '../bloc/onboarding_event.dart';
 
 const _segments = 6;
 
-/// Common chrome for every onboarding step: progress bar + Back/Skip + the
-/// bottom CTA. Each step page supplies only its body and CTA bindings.
 class OnboardingScaffold extends StatelessWidget {
   const OnboardingScaffold({
     super.key,
@@ -56,7 +54,7 @@ class OnboardingCta {
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
-  final bool muted; // styles as outlined / muted variant
+  final bool muted;
 }
 
 class _TopBar extends StatelessWidget {
@@ -238,7 +236,6 @@ class _CtaButton extends StatelessWidget {
   }
 }
 
-/// Eyebrow shown above the big title on steps 1-4.
 class StepEyebrow extends StatelessWidget {
   const StepEyebrow({super.key, required this.index, required this.label});
   final int index;
@@ -257,7 +254,6 @@ class StepEyebrow extends StatelessWidget {
   }
 }
 
-/// Big title with the trailing accent word in mint.
 class StepTitle extends StatelessWidget {
   const StepTitle({
     super.key,

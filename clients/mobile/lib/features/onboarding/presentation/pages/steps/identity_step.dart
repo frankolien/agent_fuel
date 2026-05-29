@@ -56,8 +56,6 @@ class _IdentityBodyState extends State<_IdentityBody> {
     final mono = Theme.of(context).extension<AFTypography>()!.mono;
     final state = context.watch<OnboardingBloc>().state;
     if (state is! OnboardingIdentity) return const SizedBox.shrink();
-    // ListView lets the body scroll when the IME pushes the form upward —
-    // a fixed Column would clip and trigger a RenderFlex overflow.
     return ListView(
       padding: EdgeInsets.zero,
       children: [

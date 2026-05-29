@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Agent Fuel design tokens — kept in lock-step with the web app so visual
-/// identity carries across platforms.
 class AFColors {
   static const bg = Color(0xFF0B0C0E);
   static const surface = Color(0xFF0E0F11);

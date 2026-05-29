@@ -8,7 +8,6 @@ abstract class OnboardingEvent extends Equatable {
   List<Object?> get props => const [];
 }
 
-/// Fired once on page mount — restores any cached wallet auth token.
 class OnboardingStarted extends OnboardingEvent {
   const OnboardingStarted();
 }
@@ -25,14 +24,8 @@ class OnboardingSkipped extends OnboardingEvent {
   const OnboardingSkipped();
 }
 
-/// Tap "Connect wallet" — kicks off the MWA authorize flow. Android shows
-/// its chooser, the user picks a wallet, the wallet returns an auth token.
-class WalletConnectRequested extends OnboardingEvent {
-  const WalletConnectRequested();
-}
-
-class WalletDisconnectRequested extends OnboardingEvent {
-  const WalletDisconnectRequested();
+class WalletSignInRequested extends OnboardingEvent {
+  const WalletSignInRequested();
 }
 
 class HandleChanged extends OnboardingEvent {
@@ -63,8 +56,6 @@ class RiskProfileChanged extends OnboardingEvent {
   List<Object?> get props => [profile];
 }
 
-/// Final authorize on the guardrails step: biometric prompt → deposit() →
-/// update_policy() → initialize_agent() → success.
 class OnboardingAuthorized extends OnboardingEvent {
   const OnboardingAuthorized();
 }

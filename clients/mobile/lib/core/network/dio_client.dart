@@ -1,12 +1,11 @@
 import 'package:dio/dio.dart';
 
+import '../../features/auth/data/datasources/jwt_store.dart';
 import '../config/env.dart';
 import '../error/exceptions.dart';
 
-/// Single Dio instance shared by every remote datasource. Centralizing here
-/// keeps base URL + timeouts + interceptors in one place.
 class DioClient {
-  DioClient()
+  DioClient(this._jwtStore)
       : _dio = Dio(
           BaseOptions(
             baseUrl: AppEnv.apiBase,
@@ -16,11 +15,46 @@ class DioClient {
             responseType: ResponseType.json,
           ),
         ) {
+    _dio.interceptors.add(_AuthInterceptor(_jwtStore));
     _dio.interceptors.add(_ErrorInterceptor());
   }
 
   final Dio _dio;
+  final JwtStore _jwtStore;
   Dio get dio => _dio;
+}
+
+class _AuthInterceptor extends Interceptor {
+  _AuthInterceptor(this._store);
+  final JwtStore _store;
+
+  @override
+  Future<void> onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) async {
+    if (!_isAnonymous(options.path)) {
+      final cached = await _store.read();
+      if (cached != null) {
+        options.headers['Authorization'] = 'Bearer ${cached.token}';
+      }
+    }
+    handler.next(options);
+  }
+
+  @override
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    if (err.response?.statusCode == 401) {
+      await _store.clear();
+    }
+    handler.next(err);
+  }
+
+  bool _isAnonymous(String path) =>
+      path.startsWith('/auth/nonce') || path.startsWith('/auth/verify');
 }
 
 class _ErrorInterceptor extends Interceptor {
