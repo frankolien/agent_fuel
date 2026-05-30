@@ -23,6 +23,8 @@ pub enum AlertKind {
     VaultFunded,
     VaultFrozen,
     ApprovalRequired,
+    ApprovalApproved,
+    ApprovalRejected,
 }
 
 impl AlertKind {
@@ -34,6 +36,8 @@ impl AlertKind {
             AlertKind::VaultFunded => "vault_funded",
             AlertKind::VaultFrozen => "vault_frozen",
             AlertKind::ApprovalRequired => "approval_required",
+            AlertKind::ApprovalApproved => "approval_approved",
+            AlertKind::ApprovalRejected => "approval_rejected",
         }
     }
 }
