@@ -7,6 +7,8 @@ enum AlertKind {
   vaultFunded,
   vaultFrozen,
   approvalRequired,
+  approvalApproved,
+  approvalRejected,
   unknown,
 }
 
@@ -109,6 +111,10 @@ AlertKind _parseKind(String? raw) {
       return AlertKind.vaultFrozen;
     case 'approval_required':
       return AlertKind.approvalRequired;
+    case 'approval_approved':
+      return AlertKind.approvalApproved;
+    case 'approval_rejected':
+      return AlertKind.approvalRejected;
     default:
       return AlertKind.unknown;
   }

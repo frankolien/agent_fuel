@@ -3,6 +3,8 @@ import 'package:get_it/get_it.dart';
 
 import '../../../../app/theme.dart';
 import '../../../../core/error/exceptions.dart';
+import '../../../../core/onchain/tx_preflight.dart';
+import '../../../../core/ui/onchain_error_card.dart';
 import '../../../alerts/data/repositories/alerts_repository.dart';
 import '../../../alerts/domain/entities/alert.dart';
 import '../../../auth/data/datasources/biometric_service.dart';
@@ -422,6 +424,10 @@ class _AlertIcon extends StatelessWidget {
     switch (k) {
       case AlertKind.approvalRequired:
         return Icons.fingerprint;
+      case AlertKind.approvalApproved:
+        return Icons.check_circle_outline;
+      case AlertKind.approvalRejected:
+        return Icons.cancel_outlined;
       case AlertKind.budgetThreshold:
         return Icons.speed;
       case AlertKind.scoreChange:
@@ -687,7 +693,7 @@ enum _ScanPhase { review, scanning, submitting, done }
 
 class _ApproveSpendSheetState extends State<_ApproveSpendSheet> {
   _ScanPhase _phase = _ScanPhase.review;
-  String? _error;
+  OnchainErrorState? _error;
 
   Future<void> _scan() async {
     setState(() {
@@ -701,7 +707,7 @@ class _ApproveSpendSheetState extends State<_ApproveSpendSheet> {
     if (!ok) {
       setState(() {
         _phase = _ScanPhase.review;
-        _error = 'Biometric cancelled. Tap again to retry.';
+        _error = const OnchainErrorState('Biometric cancelled. Tap again to retry.');
       });
       return;
     }
@@ -725,7 +731,7 @@ class _ApproveSpendSheetState extends State<_ApproveSpendSheet> {
     if (wallet == null) {
       setState(() {
         _phase = _ScanPhase.review;
-        _error = 'Wallet session lost. Reconnect from onboarding.';
+        _error = const OnchainErrorState('Wallet session lost. Reconnect from onboarding.');
       });
       return;
     }
@@ -753,17 +759,23 @@ class _ApproveSpendSheetState extends State<_ApproveSpendSheet> {
       await Future<void>.delayed(const Duration(milliseconds: 700));
       if (!mounted) return;
       Navigator.of(context).pop(true);
+    } on OnchainSimulationException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _phase = _ScanPhase.review;
+        _error = OnchainErrorState(e.message, e.logs);
+      });
     } on WalletException catch (e) {
       if (!mounted) return;
       setState(() {
         _phase = _ScanPhase.review;
-        _error = e.message;
+        _error = OnchainErrorState(e.message);
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _phase = _ScanPhase.review;
-        _error = 'Approval failed: $e';
+        _error = OnchainErrorState('Approval failed: $e');
       });
     }
   }
@@ -876,11 +888,7 @@ class _ApproveSpendSheetState extends State<_ApproveSpendSheet> {
             ],
             if (_error != null) ...[
               const SizedBox(height: 14),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AFColors.danger, fontSize: 13),
-              ),
+              OnchainErrorCard(error: _error!),
             ],
             const SizedBox(height: 18),
             if (_phase == _ScanPhase.review)

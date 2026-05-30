@@ -4,10 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:get_it/get_it.dart';
 
+import 'package:solana/solana.dart' show RpcClient;
+
 import '../../../../app/theme.dart';
+import '../../../../core/config/env.dart';
 import '../../../agent_keys/data/datasources/agent_key_store.dart';
+import '../../../agent_keys/data/datasources/agent_seed_recovery_sweeper.dart';
 import '../../../agent_keys/presentation/export_key_sheet.dart';
 import '../../domain/entities/agent.dart';
+import '../../domain/reputation_factors.dart';
 import '../sheets/vault_action_sheets.dart';
 
 class AgentDetailPage extends StatelessWidget {
@@ -37,6 +42,8 @@ class AgentDetailPage extends StatelessWidget {
             _ActionsRow(agent: agent),
             const SizedBox(height: 6),
             _CreditVaultCard(agent: agent, mono: mono),
+            const SizedBox(height: 6),
+            _ReputationFactorsCard(agent: agent, mono: mono),
           ],
         ),
       ),
@@ -223,9 +230,55 @@ class _KeyStateRow extends StatelessWidget {
   }
 }
 
-class _OrphanedBanner extends StatelessWidget {
+class _OrphanedBanner extends StatefulWidget {
   const _OrphanedBanner({required this.agent});
   final Agent agent;
+
+  @override
+  State<_OrphanedBanner> createState() => _OrphanedBannerState();
+}
+
+class _OrphanedBannerState extends State<_OrphanedBanner> {
+  bool _trying = false;
+
+  Future<void> _tryWalletRecovery() async {
+    if (_trying) return;
+    setState(() => _trying = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final recovered = await GetIt.I<AgentSeedRecoverySweeper>()
+          .sweep([widget.agent.pubkey], allowPrompt: true);
+      if (!mounted) return;
+      final hasNow = await GetIt.I<AgentKeyStore>().has(widget.agent.pubkey);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          backgroundColor: AFColors.surface2,
+          content: Text(
+            hasNow
+                ? 'Recovered! Reopen the agent to use it.'
+                : recovered == 0
+                    ? "Couldn't derive a key for this agent. It may pre-date wallet derivation — recover funds and create a new agent."
+                    : 'Sweep ran, but this agent did not match.',
+            style: const TextStyle(color: AFColors.fg),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          backgroundColor: AFColors.surface2,
+          content: Text(
+            'Wallet recovery failed: $e',
+            style: const TextStyle(color: AFColors.danger),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _trying = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -237,66 +290,104 @@ class _OrphanedBanner extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           side: const BorderSide(color: Color(0x4DE08577)),
         ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () async {
-            final ok = await showRecoverSheet(context, agent);
-            if (ok == true && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  backgroundColor: AFColors.surface2,
-                  content: Text(
-                    'Funds recovered to wallet',
-                    style: TextStyle(color: AFColors.fg),
-                  ),
-                ),
-              );
-            }
-          },
-          child: const Padding(
-            padding: EdgeInsets.fromLTRB(14, 12, 12, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.lock_outline,
-                  color: AFColors.danger,
-                  size: 20,
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "This device can't sign for this agent",
-                        style: TextStyle(
-                          color: AFColors.fg,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                        ),
+        child: Column(
+          children: [
+            InkWell(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+              onTap: () async {
+                final ok = await showRecoverSheet(context, widget.agent);
+                if (ok == true && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: AFColors.surface2,
+                      content: Text(
+                        'Funds recovered to wallet',
+                        style: TextStyle(color: AFColors.fg),
                       ),
-                      SizedBox(height: 3),
-                      Text(
-                        'Recover its USDC to your wallet, then create a new agent.',
-                        style: TextStyle(
-                          color: AFColors.muted,
-                          fontSize: 12.5,
-                          height: 1.4,
-                        ),
+                    ),
+                  );
+                }
+              },
+              child: const Padding(
+                padding: EdgeInsets.fromLTRB(14, 12, 12, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.lock_outline,
+                      color: AFColors.danger,
+                      size: 20,
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "This device can't sign for this agent",
+                            style: TextStyle(
+                              color: AFColors.fg,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(height: 3),
+                          Text(
+                            'Recover its USDC to your wallet, then create a new agent.',
+                            style: TextStyle(
+                              color: AFColors.muted,
+                              fontSize: 12.5,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    SizedBox(width: 8),
+                    Icon(
+                      Icons.chevron_right,
+                      color: AFColors.danger,
+                      size: 20,
+                    ),
+                  ],
                 ),
-                SizedBox(width: 8),
-                Icon(
-                  Icons.chevron_right,
-                  color: AFColors.danger,
-                  size: 20,
-                ),
-              ],
+              ),
             ),
-          ),
+            Container(
+              height: 1,
+              color: const Color(0x33E08577),
+            ),
+            InkWell(
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(14),
+              ),
+              onTap: _trying ? null : _tryWalletRecovery,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      _trying ? Icons.hourglass_empty : Icons.refresh,
+                      color: AFColors.mint,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _trying
+                          ? 'Asking wallet…'
+                          : 'Try wallet recovery first',
+                      style: const TextStyle(
+                        color: AFColors.mint,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -862,6 +953,213 @@ class _MiniChip extends StatelessWidget {
               fontSize: 17,
               fontWeight: FontWeight.w500,
               height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReputationFactorsCard extends StatefulWidget {
+  const _ReputationFactorsCard({required this.agent, required this.mono});
+  final Agent agent;
+  final TextTheme mono;
+
+  @override
+  State<_ReputationFactorsCard> createState() => _ReputationFactorsCardState();
+}
+
+class _ReputationFactorsCardState extends State<_ReputationFactorsCard> {
+  int? _currentSlot;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSlot();
+  }
+
+  Future<void> _loadSlot() async {
+    try {
+      // One-shot RPC. Used only for tenure bracket — exact value isn't
+      // critical, drift of a few seconds doesn't change the bracket.
+      final rpc = RpcClient(AppEnv.rpcUrl);
+      final slot = await rpc.getSlot();
+      if (!mounted) return;
+      setState(() => _currentSlot = slot);
+    } catch (_) {
+      // Fall back to lastActiveSlot — yields a non-zero (but stale) tenure.
+      if (!mounted) return;
+      setState(() => _currentSlot = widget.agent.lastActiveSlot);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mono = widget.mono;
+    final slot = _currentSlot ?? widget.agent.lastActiveSlot;
+    final f = ReputationFactors.forAgent(widget.agent, currentSlot: slot);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AFColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AFColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Reputation factors',
+                style: TextStyle(
+                  color: AFColors.fg,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${f.total} / ${ReputationFactors.maxTotal}',
+                style: mono.bodySmall?.copyWith(
+                  color: AFColors.muted,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _FactorRow(
+            label: 'Volume',
+            value: f.volume,
+            max: ReputationFactors.maxVolume,
+            sublabel: '${widget.agent.totalTransactions} tx',
+            mono: mono,
+          ),
+          _FactorRow(
+            label: 'Diversity',
+            value: f.diversity,
+            max: ReputationFactors.maxDiversity,
+            sublabel: '${widget.agent.servicesUsed} services',
+            mono: mono,
+          ),
+          _FactorRow(
+            label: 'Streak',
+            value: f.streak,
+            max: ReputationFactors.maxStreak,
+            sublabel: '${widget.agent.consecutiveSuccess} in a row',
+            mono: mono,
+          ),
+          _FactorRow(
+            label: 'Tenure',
+            value: f.tenure,
+            max: ReputationFactors.maxTenure,
+            sublabel: _currentSlot == null ? 'computing…' : _tenureLabel(slot),
+            mono: mono,
+          ),
+          _FactorRow(
+            label: 'Feedback',
+            value: f.feedback,
+            max: ReputationFactors.maxFeedback,
+            sublabel: widget.agent.totalFeedbackCount == 0
+                ? 'no feedback yet'
+                : '${widget.agent.activeNegativeFeedbackCount}/${widget.agent.totalFeedbackCount} negative',
+            mono: mono,
+            last: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _tenureLabel(int slot) {
+    final ageSlots = (slot - widget.agent.initSlot).clamp(0, 1 << 62);
+    final ageDays = ageSlots / 216000;
+    if (ageDays < 1) return '< 1 day';
+    if (ageDays < 30) return '${ageDays.toStringAsFixed(0)} days';
+    final months = ageDays / 30;
+    if (months < 12) return '${months.toStringAsFixed(0)} months';
+    return '${(months / 12).toStringAsFixed(1)} years';
+  }
+}
+
+class _FactorRow extends StatelessWidget {
+  const _FactorRow({
+    required this.label,
+    required this.value,
+    required this.max,
+    required this.sublabel,
+    required this.mono,
+    this.last = false,
+  });
+  final String label;
+  final int value;
+  final int max;
+  final String sublabel;
+  final TextTheme mono;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = max == 0 ? 0.0 : (value / max).clamp(0.0, 1.0);
+    return Padding(
+      padding: EdgeInsets.only(bottom: last ? 0 : 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: AFColors.fg,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Text(
+                '$value / $max',
+                style: mono.bodySmall?.copyWith(
+                  color: AFColors.muted,
+                  fontSize: 11.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(100),
+            child: Container(
+              height: 6,
+              color: AFColors.surface3,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: fraction,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: fraction > 0
+                          ? const LinearGradient(
+                              colors: [AFColors.mintDim, AFColors.mint],
+                            )
+                          : null,
+                      color: fraction > 0 ? null : AFColors.muted,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            sublabel,
+            style: const TextStyle(
+              color: AFColors.muted2,
+              fontSize: 11,
             ),
           ),
         ],

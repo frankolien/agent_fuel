@@ -7,8 +7,8 @@ import 'package:get_it/get_it.dart';
 
 import '../../../../app/router.dart';
 import '../../../../app/theme.dart';
+import '../../../agents/presentation/add_agent_sheet.dart';
 import '../../../alerts/data/repositories/alerts_repository.dart';
-import '../../../onboarding/presentation/bloc/onboarding_bloc.dart';
 import '../../../wallet/data/repositories/wallet_repository.dart';
 import '../activity/activity_feed.dart';
 import '../activity/activity_screen.dart';
@@ -702,9 +702,19 @@ class _AddAgentButton extends StatelessWidget {
       ),
       child: InkWell(
         customBorder: const StadiumBorder(),
-        onTap: () {
-          OnboardingBloc.addAgentMode = true;
-          context.router.push(const OnboardingRoute());
+        onTap: () async {
+          final ok = await showAddAgentSheet(context);
+          if (ok == true && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                backgroundColor: AFColors.surface2,
+                content: Text(
+                  'Agent provisioned',
+                  style: TextStyle(color: AFColors.fg),
+                ),
+              ),
+            );
+          }
         },
         child: const Padding(
           padding: EdgeInsets.fromLTRB(11, 0, 14, 0),
@@ -957,10 +967,7 @@ class _EmptyView extends StatelessWidget {
                 foregroundColor: const Color(0xFF08090B),
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               ),
-              onPressed: () {
-                OnboardingBloc.addAgentMode = true;
-                context.router.push(const OnboardingRoute());
-              },
+              onPressed: () => showAddAgentSheet(context),
               icon: const Icon(Icons.add, size: 18),
               label: const Text(
                 'Add agent',

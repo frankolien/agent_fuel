@@ -23,7 +23,16 @@ class AgentSeedRecoverySweeper {
   /// `onChainAgentPubkeys` is the full set of agent pubkeys this wallet
   /// owns according to the backend. Returns the count of newly persisted
   /// seeds (useful for tests / debug logging).
-  Future<int> sweep(List<String> onChainAgentPubkeys) async {
+  ///
+  /// When [allowPrompt] is true (active recovery — user explicitly asked),
+  /// the wallet is prompted for the master signature if it isn't cached.
+  /// When false (the default, passive Fleet sweep), a missing master
+  /// signature short-circuits with zero — we don't surprise the user with
+  /// a wallet prompt from a background refresh.
+  Future<int> sweep(
+    List<String> onChainAgentPubkeys, {
+    bool allowPrompt = false,
+  }) async {
     if (onChainAgentPubkeys.isEmpty) return 0;
 
     final orphaned = <String>[];
@@ -34,9 +43,8 @@ class AgentSeedRecoverySweeper {
 
     final wallet = await _wallet.cachedConnection();
     if (wallet == null) return 0;
-    if (!await _derivation.hasMasterSig(wallet.pubkeyBase58)) {
-      // Silent mode: don't surprise the user with a wallet prompt during a
-      // passive Fleet load. The orphan banner exposes a manual trigger.
+    if (!allowPrompt &&
+        !await _derivation.hasMasterSig(wallet.pubkeyBase58)) {
       return 0;
     }
 

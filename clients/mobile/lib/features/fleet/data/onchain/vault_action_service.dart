@@ -5,14 +5,16 @@ import 'package:solana/encoder.dart';
 import 'package:solana/solana.dart';
 
 import '../../../../core/config/env.dart';
+import '../../../../core/onchain/tx_preflight.dart';
 import '../../../onboarding/data/onchain/agent_instructions.dart';
 import '../../../wallet/data/datasources/mwa_datasource.dart';
 
 class VaultActionService {
-  VaultActionService(this._mwa, {RpcClient? rpc})
+  VaultActionService(this._mwa, this._preflight, {RpcClient? rpc})
       : _rpc = rpc ?? RpcClient(AppEnv.rpcUrl);
 
   final MwaDataSource _mwa;
+  final TxPreflight _preflight;
   final RpcClient _rpc;
 
   Future<String> fund({
@@ -163,6 +165,10 @@ class VaultActionService {
       compiledMessage: compiled,
     );
     final bytes = Uint8List.fromList(signedTx.toByteArray().toList());
+    // Surface on-chain errors locally before the wallet hides them behind
+    // a generic "Something went wrong." Throws OnchainSimulationException
+    // with the program log lines if simulation reverts.
+    await _preflight.check(bytes);
     return _mwa.signAndSendTransaction(
       authToken: walletAuthToken,
       transactionBytes: bytes,

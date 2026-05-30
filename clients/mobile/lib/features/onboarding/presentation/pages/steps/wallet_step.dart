@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../app/theme.dart';
+import '../../../../../core/ui/onchain_error_card.dart';
 import '../../bloc/onboarding_bloc.dart';
 import '../../bloc/onboarding_event.dart';
 import '../../bloc/onboarding_state.dart';
@@ -58,7 +59,7 @@ class _WalletBody extends StatelessWidget {
           const _IdleTile(),
         if (state.error != null) ...[
           const SizedBox(height: 14),
-          _ErrorBanner(message: state.error!),
+          OnchainErrorCard(error: OnchainErrorState(state.error!)),
         ],
         const SizedBox(height: 18),
         const _CompatibilityRow(),
@@ -126,36 +127,6 @@ class _SigningInTile extends StatelessWidget {
               'Check your wallet — approve the authorize sheet, then approve '
               'the sign-in message that follows.',
               style: TextStyle(color: AFColors.muted, height: 1.45),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message});
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AFColors.danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AFColors.danger.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline, color: AFColors.danger, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: AFColors.fg, height: 1.4),
             ),
           ),
         ],

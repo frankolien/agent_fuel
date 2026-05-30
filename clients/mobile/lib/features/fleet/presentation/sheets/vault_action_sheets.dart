@@ -5,6 +5,8 @@ import 'package:get_it/get_it.dart';
 
 import '../../../../app/theme.dart';
 import '../../../../core/error/exceptions.dart';
+import '../../../../core/onchain/tx_preflight.dart';
+import '../../../../core/ui/onchain_error_card.dart';
 import '../../../auth/data/datasources/biometric_service.dart';
 import '../../../wallet/data/repositories/wallet_repository.dart';
 import '../../data/onchain/vault_action_service.dart';
@@ -116,7 +118,7 @@ class _FundSheetBody extends StatefulWidget {
 class _FundSheetBodyState extends State<_FundSheetBody> {
   final _ctrl = TextEditingController(text: '100');
   bool _busy = false;
-  String? _error;
+  OnchainErrorState? _error;
 
   static const _presets = [50, 100, 500, 1000];
 
@@ -137,7 +139,7 @@ class _FundSheetBodyState extends State<_FundSheetBody> {
   Future<void> _submit() async {
     final amount = _amount;
     if (amount == null) {
-      setState(() => _error = 'Enter an amount greater than zero.');
+      setState(() => _error = const OnchainErrorState('Enter an amount greater than zero.'));
       return;
     }
     setState(() {
@@ -160,17 +162,23 @@ class _FundSheetBodyState extends State<_FundSheetBody> {
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
+    } on OnchainSimulationException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = OnchainErrorState(e.message, e.logs);
+      });
     } on WalletException catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = e.message;
+        _error = OnchainErrorState(e.message);
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = 'Deposit failed: $e';
+        _error = OnchainErrorState('Deposit failed: $e');
       });
     }
   }
@@ -236,11 +244,7 @@ class _FundSheetBodyState extends State<_FundSheetBody> {
         ),
         if (_error != null) ...[
           const SizedBox(height: 14),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AFColors.danger, fontSize: 13),
-          ),
+          OnchainErrorCard(error: _error!),
         ],
         const SizedBox(height: 22),
         _MintButton(
@@ -398,7 +402,7 @@ class _FreezeSheetBody extends StatefulWidget {
 class _FreezeSheetBodyState extends State<_FreezeSheetBody> {
   bool _busy = false;
   bool _done = false;
-  String? _error;
+  OnchainErrorState? _error;
 
   Future<void> _confirmFreeze() async {
     if (_busy || _done) return;
@@ -425,17 +429,23 @@ class _FreezeSheetBodyState extends State<_FreezeSheetBody> {
       await Future<void>.delayed(const Duration(milliseconds: 350));
       if (!mounted) return;
       Navigator.of(context).pop(true);
+    } on OnchainSimulationException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = OnchainErrorState(e.message, e.logs);
+      });
     } on WalletException catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = e.message;
+        _error = OnchainErrorState(e.message);
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = 'Freeze failed: $e';
+        _error = OnchainErrorState('Freeze failed: $e');
       });
     }
   }
@@ -501,11 +511,7 @@ class _FreezeSheetBodyState extends State<_FreezeSheetBody> {
         ),
         if (_error != null) ...[
           const SizedBox(height: 14),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AFColors.danger, fontSize: 13),
-          ),
+          OnchainErrorCard(error: _error!),
         ],
         const SizedBox(height: 12),
         _GhostButton(
@@ -651,49 +657,21 @@ class _SlideToConfirmState extends State<_SlideToConfirm> {
 }
 
 // ============================================================================
-// APPROVE (biometric gate — no on-chain action yet)
+// APPROVE — informational pointer to the Alerts tab.
+//
+// The real approve flow lives on each pending-spend alert (alerts_screen.dart's
+// `_ApproveSpendSheet`), where the on-chain context (PendingSpend pubkey,
+// agent, service, amount) is available. Tapping "Approve" from agent detail
+// has no specific pending in mind, so this sheet just routes the user to
+// the Alerts tab.
 // ============================================================================
 
-class _ApproveSheetBody extends StatefulWidget {
+class _ApproveSheetBody extends StatelessWidget {
   const _ApproveSheetBody({required this.agent});
   final Agent agent;
 
   @override
-  State<_ApproveSheetBody> createState() => _ApproveSheetBodyState();
-}
-
-enum _ApprovePhase { review, scanning, done }
-
-class _ApproveSheetBodyState extends State<_ApproveSheetBody> {
-  _ApprovePhase _phase = _ApprovePhase.review;
-  String? _error;
-
-  Future<void> _scan() async {
-    setState(() {
-      _phase = _ApprovePhase.scanning;
-      _error = null;
-    });
-    final ok = await GetIt.I<BiometricService>().authorize(
-      'Approve this spend on ${_short(widget.agent.pubkey)}',
-    );
-    if (!mounted) return;
-    if (!ok) {
-      setState(() {
-        _phase = _ApprovePhase.review;
-        _error = 'Biometric cancelled. Tap again to retry.';
-      });
-      return;
-    }
-    HapticFeedback.lightImpact();
-    setState(() => _phase = _ApprovePhase.done);
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    Navigator.of(context).pop(true);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final mono = Theme.of(context).extension<AFTypography>()!.mono;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -709,136 +687,57 @@ class _ApproveSheetBodyState extends State<_ApproveSheetBody> {
           ),
         ),
         const SizedBox(height: 6),
-        const Text(
-          'A pending spend exceeded the per-tx limit. Confirm with biometrics to release it.',
+        Text(
+          'Pending approvals for ${_short(agent.pubkey)} live in the Alerts '
+          'tab. Tap one there to review the exact amount, service, and '
+          'agent before authorizing on chain.',
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             color: AFColors.muted,
             fontSize: 14,
             height: 1.45,
           ),
         ),
-        const SizedBox(height: 20),
-        if (_phase == _ApprovePhase.done)
-          _ApproveDone()
-        else
-          _ApproveDetails(agent: widget.agent, mono: mono, phase: _phase),
-        if (_error != null) ...[
-          const SizedBox(height: 14),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AFColors.danger, fontSize: 13),
+        const SizedBox(height: 22),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AFColors.mintTint,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AFColors.mintDim),
           ),
-        ],
-        const SizedBox(height: 18),
-        if (_phase == _ApprovePhase.review)
-          _MintButton(
-            label: 'Authorize with biometric',
-            icon: Icons.fingerprint,
-            onPressed: _scan,
-          ),
-        if (_phase == _ApprovePhase.review)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: _GhostButton(
-              label: 'Cancel',
-              onPressed: () => Navigator.of(context).pop(false),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _ApproveDetails extends StatelessWidget {
-  const _ApproveDetails({
-    required this.agent,
-    required this.mono,
-    required this.phase,
-  });
-  final Agent agent;
-  final TextTheme mono;
-  final _ApprovePhase phase;
-
-  @override
-  Widget build(BuildContext context) {
-    final scanning = phase == _ApprovePhase.scanning;
-    return Column(
-      children: [
-        Text(
-          '\$14.22',
-          textAlign: TextAlign.center,
-          style: mono.displayMedium?.copyWith(
-            color: AFColors.mint,
-            fontSize: 52,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -1.82,
-            height: 1,
-            shadows: const [
-              Shadow(color: AFColors.mintGlow, blurRadius: 28),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, color: AFColors.mint, size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "When an agent's spend exceeds its policy, you'll see an "
+                  'urgent alert here. The alert holds the on-chain context '
+                  'needed to approve or reject.',
+                  style: TextStyle(
+                    color: AFColors.fg2,
+                    fontSize: 12.5,
+                    height: 1.45,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 6),
-        const Text(
-          'to Cortex Inference',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AFColors.muted, fontSize: 13),
+        const SizedBox(height: 22),
+        _MintButton(
+          label: 'Open Alerts',
+          icon: Icons.notifications_outlined,
+          onPressed: () => Navigator.of(context).pop(true),
         ),
-        const SizedBox(height: 18),
-        _Row(k: 'Agent', v: _short(agent.pubkey), mono: mono),
-        _Row(k: 'Service', v: 'Cortex Inference', mono: mono),
-        _Row(k: 'Per-tx limit', v: '\$10.00', mono: mono, last: true),
-        if (scanning) ...[
-          const SizedBox(height: 24),
-          const AnimatedScale(
-            scale: 1,
-            duration: Duration(milliseconds: 600),
-            child: Icon(
-              Icons.fingerprint,
-              color: AFColors.mint,
-              size: 64,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Scanning…',
-            style: TextStyle(color: AFColors.muted, fontSize: 14),
-          ),
-        ],
+        const SizedBox(height: 10),
+        _GhostButton(
+          label: 'Close',
+          onPressed: () => Navigator.of(context).pop(false),
+        ),
       ],
-    );
-  }
-}
-
-class _ApproveDone extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      child: Column(
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: const BoxDecoration(
-              color: AFColors.mintTint,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.check, color: AFColors.mint, size: 40),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Approved',
-            style: TextStyle(
-              color: AFColors.fg,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -904,7 +803,7 @@ enum _RecoverPhase { loading, ready, busy, done, empty }
 class _RecoverSheetBodyState extends State<_RecoverSheetBody> {
   _RecoverPhase _phase = _RecoverPhase.loading;
   int _balanceMicro = 0;
-  String? _error;
+  OnchainErrorState? _error;
 
   @override
   void initState() {
@@ -934,7 +833,7 @@ class _RecoverSheetBodyState extends State<_RecoverSheetBody> {
       if (!mounted) return;
       setState(() {
         _phase = _RecoverPhase.ready;
-        _error = 'Could not read vault balance: $e';
+        _error = OnchainErrorState('Could not read vault balance: $e');
       });
     }
   }
@@ -952,7 +851,7 @@ class _RecoverSheetBodyState extends State<_RecoverSheetBody> {
     if (!approved) {
       setState(() {
         _phase = _RecoverPhase.ready;
-        _error = 'Biometric cancelled. Tap again to retry.';
+        _error = const OnchainErrorState('Biometric cancelled. Tap again to retry.');
       });
       return;
     }
@@ -980,13 +879,13 @@ class _RecoverSheetBodyState extends State<_RecoverSheetBody> {
       if (!mounted) return;
       setState(() {
         _phase = _RecoverPhase.ready;
-        _error = e.message;
+        _error = OnchainErrorState(e.message);
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _phase = _RecoverPhase.ready;
-        _error = 'Recovery failed: $e';
+        _error = OnchainErrorState('Recovery failed: $e');
       });
     }
   }
@@ -1046,11 +945,7 @@ class _RecoverSheetBodyState extends State<_RecoverSheetBody> {
           ),
         if (_error != null) ...[
           const SizedBox(height: 14),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AFColors.danger, fontSize: 13),
-          ),
+          OnchainErrorCard(error: _error!),
         ],
         const SizedBox(height: 22),
         if (_phase == _RecoverPhase.ready)

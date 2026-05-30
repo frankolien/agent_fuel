@@ -9,7 +9,9 @@ class Agent extends Equatable {
     required this.totalVolumeUsdc,
     required this.servicesUsed,
     required this.consecutiveSuccess,
+    required this.totalFeedbackCount,
     required this.activeNegativeFeedbackCount,
+    required this.initSlot,
     required this.lastActiveSlot,
     required this.updatedAt,
   });
@@ -22,8 +24,11 @@ class Agent extends Equatable {
         totalVolumeUsdc: (json['total_volume_usdc'] as num).toInt(),
         servicesUsed: (json['services_used'] as num).toInt(),
         consecutiveSuccess: (json['consecutive_success'] as num).toInt(),
+        totalFeedbackCount:
+            (json['total_feedback_count'] as num?)?.toInt() ?? 0,
         activeNegativeFeedbackCount:
             (json['active_negative_feedback_count'] as num).toInt(),
+        initSlot: (json['init_slot'] as num?)?.toInt() ?? 0,
         lastActiveSlot: (json['last_active_slot'] as num).toInt(),
         updatedAt: DateTime.parse(json['updated_at'] as String),
       );
@@ -35,7 +40,9 @@ class Agent extends Equatable {
   final int totalVolumeUsdc;
   final int servicesUsed;
   final int consecutiveSuccess;
+  final int totalFeedbackCount;
   final int activeNegativeFeedbackCount;
+  final int initSlot;
   final int lastActiveSlot;
   final DateTime updatedAt;
 
@@ -50,7 +57,9 @@ class Agent extends Equatable {
         totalVolumeUsdc,
         servicesUsed,
         consecutiveSuccess,
+        totalFeedbackCount,
         activeNegativeFeedbackCount,
+        initSlot,
         lastActiveSlot,
         updatedAt,
       ];
