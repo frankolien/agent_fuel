@@ -11,11 +11,14 @@ import '../../../../core/config/env.dart';
 import '../../../agent_keys/data/datasources/agent_key_store.dart';
 import '../../../agent_keys/data/datasources/agent_seed_recovery_sweeper.dart';
 import '../../../agent_keys/presentation/export_key_sheet.dart';
+import '../../data/onchain/vault_action_service.dart';
+import '../../data/repositories/fleet_repository.dart';
 import '../../domain/entities/agent.dart';
 import '../../domain/reputation_factors.dart';
+import '../sheets/edit_policy_sheet.dart';
 import '../sheets/vault_action_sheets.dart';
 
-class AgentDetailPage extends StatelessWidget {
+class AgentDetailPage extends StatefulWidget {
   const AgentDetailPage({
     super.key,
     required this.agent,
@@ -26,25 +29,95 @@ class AgentDetailPage extends StatelessWidget {
   final int? scoreDelta;
 
   @override
+  State<AgentDetailPage> createState() => _AgentDetailPageState();
+}
+
+class _AgentDetailPageState extends State<AgentDetailPage> {
+  late Agent _agent;
+  int? _vaultBalanceMicro;
+  bool _refreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _agent = widget.agent;
+    // Fire and forget — the card renders a loading shimmer until this lands.
+    _refreshVaultBalance();
+  }
+
+  Future<void> _refreshAgent() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    final results = await Future.wait<dynamic>([
+      _fetchFreshAgent(),
+      _fetchVaultBalance(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      final fresh = results[0];
+      if (fresh is Agent) _agent = fresh;
+      final bal = results[1];
+      if (bal is int) _vaultBalanceMicro = bal;
+      _refreshing = false;
+    });
+  }
+
+  Future<void> _refreshVaultBalance() async {
+    final bal = await _fetchVaultBalance();
+    if (!mounted || bal == null) return;
+    setState(() => _vaultBalanceMicro = bal);
+  }
+
+  Future<Agent?> _fetchFreshAgent() async {
+    try {
+      return await GetIt.I<FleetRepository>().getAgent(_agent.pubkey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<int?> _fetchVaultBalance() async {
+    try {
+      return await GetIt.I<VaultActionService>().fetchVaultBalanceMicro(
+        ownerPubkeyBase58: _agent.owner,
+        agentPubkeyBase58: _agent.pubkey,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final mono = Theme.of(context).extension<AFTypography>()!.mono;
     return Scaffold(
       backgroundColor: AFColors.bg,
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.only(top: 4, bottom: 36),
-          children: [
-            _DetailNav(active: agent.isScored),
-            _DetailHero(agent: agent, mono: mono),
-            _DialCard(agent: agent, delta: scoreDelta, mono: mono),
-            const SizedBox(height: 4),
-            _ActionsRow(agent: agent),
-            const SizedBox(height: 6),
-            _CreditVaultCard(agent: agent, mono: mono),
-            const SizedBox(height: 6),
-            _ReputationFactorsCard(agent: agent, mono: mono),
-          ],
+        child: RefreshIndicator(
+          onRefresh: _refreshAgent,
+          color: AFColors.mint,
+          backgroundColor: AFColors.surface,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(top: 4, bottom: 36),
+            children: [
+              _DetailNav(active: _agent.isScored),
+              _DetailHero(agent: _agent, mono: mono),
+              _DialCard(agent: _agent, delta: widget.scoreDelta, mono: mono),
+              const SizedBox(height: 4),
+              _ActionsRow(agent: _agent, onActionSucceeded: _refreshAgent),
+              _EditPolicyRow(agent: _agent, onUpdated: _refreshAgent),
+              const SizedBox(height: 6),
+              _CreditVaultCard(
+                agent: _agent,
+                vaultBalanceMicro: _vaultBalanceMicro,
+                mono: mono,
+              ),
+              const SizedBox(height: 6),
+              _ReputationFactorsCard(agent: _agent, mono: mono),
+            ],
+          ),
         ),
       ),
     );
@@ -652,8 +725,9 @@ class _DialPainter extends CustomPainter {
 }
 
 class _ActionsRow extends StatelessWidget {
-  const _ActionsRow({required this.agent});
+  const _ActionsRow({required this.agent, required this.onActionSucceeded});
   final Agent agent;
+  final Future<void> Function() onActionSucceeded;
 
   @override
   Widget build(BuildContext context) {
@@ -672,6 +746,7 @@ class _ActionsRow extends StatelessWidget {
           ),
         ),
       );
+      await onActionSucceeded();
     }
 
     return Padding(
@@ -758,14 +833,22 @@ class _ActionTile extends StatelessWidget {
 }
 
 class _CreditVaultCard extends StatelessWidget {
-  const _CreditVaultCard({required this.agent, required this.mono});
+  const _CreditVaultCard({
+    required this.agent,
+    required this.vaultBalanceMicro,
+    required this.mono,
+  });
   final Agent agent;
+  final int? vaultBalanceMicro;
   final TextTheme mono;
 
   @override
   Widget build(BuildContext context) {
     final volumeUsd = agent.totalVolumeUsdc / 1000000;
-    final remText = _fmtUsd(volumeUsd);
+    final balanceLoaded = vaultBalanceMicro != null;
+    final balanceText = balanceLoaded
+        ? '\$${_fmtUsd((vaultBalanceMicro!) / 1000000)}'
+        : '\$—';
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.all(18),
@@ -796,19 +879,50 @@ class _CreditVaultCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            '\$$remText',
+            balanceText,
             style: mono.headlineMedium?.copyWith(
-              color: AFColors.fg,
-              fontSize: 30,
+              color: balanceLoaded ? AFColors.mint : AFColors.muted,
+              fontSize: 34,
               fontWeight: FontWeight.w600,
               letterSpacing: -0.75,
               height: 1,
+              shadows: balanceLoaded
+                  ? const [Shadow(color: AFColors.mintGlow, blurRadius: 20)]
+                  : null,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'lifetime volume · ${_fmtCompact(agent.totalTransactions)} tx',
+            balanceLoaded ? 'available balance' : 'reading on-chain…',
             style: const TextStyle(color: AFColors.muted, fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: AFColors.surface2,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AFColors.line),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.swap_horiz,
+                    color: AFColors.muted, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  'Lifetime volume · \$${_fmtUsd(volumeUsd)}',
+                  style: const TextStyle(color: AFColors.fg2, fontSize: 12.5),
+                ),
+                const Spacer(),
+                Text(
+                  '${_fmtCompact(agent.totalTransactions)} tx',
+                  style: mono.bodySmall?.copyWith(
+                    color: AFColors.muted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 14),
           _VaultGauge(
@@ -1195,4 +1309,71 @@ String _tier(int score) {
 String _label(Agent a) {
   if (a.servicesUsed == 0) return 'Agent · idle';
   return 'Agent · ${_fmtCompact(a.servicesUsed)} services';
+}
+
+class _EditPolicyRow extends StatelessWidget {
+  const _EditPolicyRow({required this.agent, required this.onUpdated});
+  final Agent agent;
+  final Future<void> Function() onUpdated;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+      child: Material(
+        color: AFColors.surface,
+        shape: RoundedRectangleBorder(
+          side: const BorderSide(color: AFColors.line),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () async {
+            final ok = await showEditPolicySheet(context, agent);
+            if (ok != true || !context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                backgroundColor: AFColors.surface2,
+                content: Text(
+                  'Policy updated',
+                  style: TextStyle(color: AFColors.fg),
+                ),
+              ),
+            );
+            await onUpdated();
+          },
+          child: const Padding(
+            padding: EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(
+              children: [
+                Icon(Icons.tune, color: AFColors.mint, size: 18),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Edit policy',
+                        style: TextStyle(
+                          color: AFColors.fg,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'per-tx, hourly, and lifetime caps',
+                        style: TextStyle(color: AFColors.muted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: AFColors.muted, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

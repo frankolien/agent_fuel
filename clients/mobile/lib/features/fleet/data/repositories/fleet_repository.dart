@@ -26,4 +26,18 @@ class FleetRepository {
       throw ServerException(e.message ?? 'Unknown error');
     }
   }
+
+  Future<Agent> getAgent(String pubkey) async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>(
+        ApiEndpoint.agent(pubkey),
+      );
+      return Agent.fromJson(res.data!);
+    } on DioException catch (e) {
+      final inner = e.error;
+      if (inner is ServerException) throw inner;
+      if (inner is NetworkException) throw inner;
+      throw ServerException(e.message ?? 'Unknown error');
+    }
+  }
 }

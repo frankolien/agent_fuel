@@ -117,6 +117,36 @@ class VaultActionService {
     );
   }
 
+  /// Owner-signed rewrite of an agent's spend policy. Limits are in whole
+  /// USDC (converted to micro internally). Whitelist takes up to 8 service
+  /// pubkeys — pass [] for "wide open".
+  Future<String> updatePolicy({
+    required String ownerPubkeyBase58,
+    required String agentPubkeyBase58,
+    required String walletAuthToken,
+    required int perTxLimitUsdc,
+    required int hourlyLimitUsdc,
+    required int lifetimeLimitUsdc,
+    required bool allowPostPay,
+    required List<String> whitelistBase58,
+  }) async {
+    final accounts = await _deriveAccounts(ownerPubkeyBase58, agentPubkeyBase58);
+    return _submit(
+      ownerPubkeyBase58: ownerPubkeyBase58,
+      walletAuthToken: walletAuthToken,
+      instruction: updatePolicyIx(
+        accounts: accounts,
+        perTxLimitUsdc: perTxLimitUsdc * 1000000,
+        hourlyLimitUsdc: hourlyLimitUsdc * 1000000,
+        lifetimeLimitUsdc: lifetimeLimitUsdc * 1000000,
+        allowPostPay: allowPostPay,
+        whitelist: whitelistBase58
+            .map(Ed25519HDPublicKey.fromBase58)
+            .toList(growable: false),
+      ),
+    );
+  }
+
   Future<String> cancelSpend({
     required String ownerPubkeyBase58,
     required String agentPubkeyBase58,

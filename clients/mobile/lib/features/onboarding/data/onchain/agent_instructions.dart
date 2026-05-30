@@ -199,6 +199,49 @@ Instruction unfreezeVaultIx({required OnchainAccounts accounts}) {
 const _approveSpendDiscriminator = <int>[248, 201, 151, 15, 28, 162, 112, 90];
 // sha256("global:cancel_spend")[..8]
 const _cancelSpendDiscriminator = <int>[122, 254, 101, 132, 241, 232, 205, 179];
+// sha256("global:update_policy")[..8]
+const _updatePolicyDiscriminator = <int>[212, 245, 246, 7, 163, 151, 18, 57];
+
+const _whitelistLen = 8;
+
+Instruction updatePolicyIx({
+  required OnchainAccounts accounts,
+  required int perTxLimitUsdc,
+  required int hourlyLimitUsdc,
+  required int lifetimeLimitUsdc,
+  required bool allowPostPay,
+  required List<Ed25519HDPublicKey> whitelist,
+}) {
+  if (whitelist.length > _whitelistLen) {
+    throw ArgumentError(
+      'whitelist may contain at most $_whitelistLen entries',
+    );
+  }
+  final padded = List<Ed25519HDPublicKey>.generate(
+    _whitelistLen,
+    (i) => i < whitelist.length
+        ? whitelist[i]
+        : Ed25519HDPublicKey(List<int>.filled(32, 0)),
+  );
+  final data = BytesBuilder()
+    ..add(_updatePolicyDiscriminator)
+    ..add(_u64Le(perTxLimitUsdc))
+    ..add(_u64Le(hourlyLimitUsdc))
+    ..add(_u64Le(lifetimeLimitUsdc))
+    ..addByte(allowPostPay ? 1 : 0);
+  for (final pk in padded) {
+    data.add(pk.bytes);
+  }
+  return Instruction(
+    programId: Ed25519HDPublicKey.fromBase58(AppEnv.creditVaultProgramId),
+    accounts: [
+      AccountMeta.readonly(pubKey: accounts.owner, isSigner: true),
+      AccountMeta.readonly(pubKey: accounts.vault, isSigner: false),
+      AccountMeta.writeable(pubKey: accounts.policy, isSigner: false),
+    ],
+    data: ByteArray(data.toBytes()),
+  );
+}
 
 Instruction approveSpendIx({
   required OnchainAccounts accounts,
