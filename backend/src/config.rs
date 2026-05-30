@@ -23,6 +23,19 @@ pub struct Config {
     /// disables the backfill endpoint with 503. Override with `SOLANA_RPC_URL`
     /// (e.g. a Helius RPC URL like `https://mainnet.helius-rpc.com/?api-key=…`).
     pub solana_rpc_url: Option<String>,
+    /// Devnet dev-USDC mint pubkey (base58). Required to enable the
+    /// `POST /api/dev/airdrop` route. Set with `AGENT_FUEL_USDC_MINT`.
+    pub dev_airdrop_mint: Option<String>,
+    /// Filesystem path to the mint authority keypair JSON. One of two ways
+    /// to enable the `POST /api/dev/airdrop` route. Set with
+    /// `AGENT_FUEL_USDC_MINT_AUTHORITY_PATH`. Cloud deploys (Railway, Render,
+    /// Fly) should prefer `AGENT_FUEL_USDC_MINT_AUTHORITY_B64` instead.
+    pub dev_airdrop_authority_path: Option<String>,
+    /// Base64-encoded mint authority keypair — for cloud deploys that can't
+    /// mount a file. Accepts either the raw 64 bytes base64'd, or the JSON
+    /// byte-array form base64'd. Takes precedence over the file-path var if
+    /// both are set. Production deploys MUST leave this unset.
+    pub dev_airdrop_authority_b64: Option<String>,
 }
 
 impl Config {
@@ -62,6 +75,16 @@ impl Config {
             .ok()
             .filter(|s| !s.is_empty());
 
+        let dev_airdrop_mint = env::var("AGENT_FUEL_USDC_MINT")
+            .ok()
+            .filter(|s| !s.is_empty());
+        let dev_airdrop_authority_path = env::var("AGENT_FUEL_USDC_MINT_AUTHORITY_PATH")
+            .ok()
+            .filter(|s| !s.is_empty());
+        let dev_airdrop_authority_b64 = env::var("AGENT_FUEL_USDC_MINT_AUTHORITY_B64")
+            .ok()
+            .filter(|s| !s.is_empty());
+
         Ok(Self {
             bind_addr,
             database_url,
@@ -74,6 +97,9 @@ impl Config {
             cors_allowed_origins,
             webhook_body_max_bytes,
             solana_rpc_url,
+            dev_airdrop_mint,
+            dev_airdrop_authority_path,
+            dev_airdrop_authority_b64,
         })
     }
 }

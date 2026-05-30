@@ -67,6 +67,19 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    let dev_airdrop = agent_fuel_backend::dev_airdrop::maybe_build(
+        cfg.solana_rpc_url.as_deref(),
+        cfg.dev_airdrop_mint.as_deref(),
+        cfg.dev_airdrop_authority_path.as_deref(),
+        cfg.dev_airdrop_authority_b64.as_deref(),
+    )?;
+    if dev_airdrop.is_some() {
+        tracing::warn!(
+            "POST /api/dev/airdrop is ENABLED (AGENT_FUEL_USDC_MINT_AUTHORITY_PATH is set). \
+             This route mints dev USDC to any wallet on demand. Never enable in prod."
+        );
+    }
+
     let state = web::Data::new(AppState {
         pool,
         helius_webhook_secret: cfg.helius_webhook_secret.clone(),
@@ -96,6 +109,16 @@ async fn main() -> anyhow::Result<()> {
         .finish()
         .expect("static governor config");
 
+    // The dev airdrop mints real on-chain dev-USDC and uses a private key
+    // held in env. Even with the route gated on env presence, throttle it
+    // per-IP so a leaked authority + open port stays annoying to abuse:
+    // 1 req per 30s, burst of 3.
+    let dev_airdrop_rate_limit = GovernorConfigBuilder::default()
+        .seconds_per_request(30)
+        .burst_size(3)
+        .finish()
+        .expect("static governor config");
+
     let server = HttpServer::new(move || {
         // `Cors` is rebuilt per worker — it's a cheap struct of vecs, and
         // origin matching happens on every request anyway.
@@ -113,7 +136,15 @@ async fn main() -> anyhow::Result<()> {
             .wrap(cors)
             .wrap(TracingLogger::default())
             .wrap(middleware::NormalizePath::trim())
-            .configure(|cfg| routes::configure(cfg, &reputation_rate_limit, &limits))
+            .configure(|cfg| {
+                routes::configure(
+                    cfg,
+                    &reputation_rate_limit,
+                    &limits,
+                    dev_airdrop.clone(),
+                    &dev_airdrop_rate_limit,
+                )
+            })
     })
     .bind(&bind)?
     // Workers finish in-flight requests before exiting on `handle.stop(true)`.

@@ -2,6 +2,8 @@ use actix_governor::governor::middleware::NoOpMiddleware;
 use actix_governor::{Governor, GovernorConfig, PeerIpKeyExtractor};
 use actix_web::web;
 
+use crate::dev_airdrop::DevAirdropHandle;
+
 pub mod api;
 pub mod auth;
 mod health;
@@ -18,6 +20,8 @@ pub fn configure(
     cfg: &mut web::ServiceConfig,
     reputation_rate_limit: &GovernorConfig<PeerIpKeyExtractor, NoOpMiddleware>,
     limits: &Limits,
+    dev_airdrop: Option<DevAirdropHandle>,
+    dev_airdrop_rate_limit: &GovernorConfig<PeerIpKeyExtractor, NoOpMiddleware>,
 ) {
     cfg.service(health::live)
         .service(health::ready)
@@ -37,5 +41,5 @@ pub fn configure(
                 .wrap(Governor::new(reputation_rate_limit))
                 .route(web::get().to(reputation::lookup)),
         );
-    api::configure(cfg);
+    api::configure(cfg, dev_airdrop, dev_airdrop_rate_limit);
 }

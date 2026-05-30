@@ -60,6 +60,12 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 # transitive dep via ed25519-dalek; making it explicit so the backfill module's
 # requirements are declared at the surface.
 curve25519-dalek = { version = "4", default-features = false, features = ["alloc"] }
+# Dev-only USDC airdrop endpoint: signs MintTo txs with a local mint authority
+# keypair. Gated by AGENT_FUEL_USDC_MINT_AUTHORITY_PATH at startup — if the
+# env var is unset the route is never registered, so prod images don't expose
+# it even though the deps are linked.
+solana-sdk = { workspace = true }
+solana-client = "2.2"
 
 [dev-dependencies]
 actix-rt = "2"

@@ -3,6 +3,7 @@ pub mod auth;
 pub mod backfill;
 pub mod config;
 pub mod db;
+pub mod dev_airdrop;
 pub mod events;
 pub mod mirror;
 pub mod notifier;
