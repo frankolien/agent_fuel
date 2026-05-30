@@ -1,6 +1,7 @@
 import 'package:get_it/get_it.dart';
 
 import '../core/network/dio_client.dart';
+import '../core/onchain/dev_airdrop_service.dart';
 import '../core/onchain/tx_preflight.dart';
 import '../features/auth/data/datasources/biometric_service.dart';
 import '../features/auth/data/datasources/jwt_store.dart';
@@ -51,6 +52,9 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<AuthTokenStore>(AuthTokenStore.new);
   sl.registerLazySingleton<MwaDataSource>(MwaDataSource.new);
   sl.registerLazySingleton<TxPreflight>(TxPreflight.new);
+  sl.registerLazySingleton<DevAirdropService>(
+    () => DevAirdropService(sl<DioClient>()),
+  );
   sl.registerLazySingleton<WalletBalanceService>(WalletBalanceService.new);
   sl.registerLazySingleton<AgentProvisioningService>(
     AgentProvisioningService.new,

@@ -5,6 +5,7 @@ import 'package:get_it/get_it.dart';
 
 import '../../../../app/theme.dart';
 import '../../../../core/error/exceptions.dart';
+import '../../../../core/onchain/dev_airdrop_service.dart';
 import '../../../../core/onchain/tx_preflight.dart';
 import '../../../../core/ui/onchain_error_card.dart';
 import '../../../auth/data/datasources/biometric_service.dart';
@@ -60,28 +61,28 @@ Future<bool?> showRecoverSheet(BuildContext context, Agent agent) {
   );
 }
 
+// Constrains the body to ≤90% screen height and wraps the child in a
+// SingleChildScrollView so expanding content (program-log toggle, error card
+// with hint) never overflows the bottom CTA off-screen. The grab handle
+// stays pinned above the scrollable area.
 class _SheetScaffold extends StatelessWidget {
   const _SheetScaffold({required this.child});
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final maxH = MediaQuery.of(context).size.height * 0.9;
     return AnimatedPadding(
       duration: const Duration(milliseconds: 150),
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: Container(
+        constraints: BoxConstraints(maxHeight: maxH),
         decoration: const BoxDecoration(
           color: Color(0xFF0C0D0F),
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           border: Border(top: BorderSide(color: AFColors.line2)),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          20,
-          12,
-          20,
-          28 + MediaQuery.of(context).padding.bottom,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -89,13 +90,23 @@ class _SheetScaffold extends StatelessWidget {
             Container(
               width: 38,
               height: 5,
-              margin: const EdgeInsets.only(bottom: 18),
+              margin: const EdgeInsets.only(top: 12, bottom: 18),
               decoration: BoxDecoration(
                 color: const Color(0x2EFFFFFF),
                 borderRadius: BorderRadius.circular(100),
               ),
             ),
-            child,
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  0,
+                  20,
+                  28 + MediaQuery.of(context).padding.bottom,
+                ),
+                child: child,
+              ),
+            ),
           ],
         ),
       ),
@@ -118,9 +129,57 @@ class _FundSheetBody extends StatefulWidget {
 class _FundSheetBodyState extends State<_FundSheetBody> {
   final _ctrl = TextEditingController(text: '100');
   bool _busy = false;
+  bool _airdropping = false;
+  String? _airdropOk;
   OnchainErrorState? _error;
 
   static const _presets = [50, 100, 500, 1000];
+
+  bool get _showAirdrop {
+    final e = _error;
+    if (e == null) return false;
+    final blob = '${e.message}\n${e.logs.join('\n')}'.toLowerCase();
+    return blob.contains('insufficient funds');
+  }
+
+  Future<void> _airdrop() async {
+    if (_airdropping || _busy) return;
+    setState(() {
+      _airdropping = true;
+      _airdropOk = null;
+    });
+    try {
+      final wallet = await GetIt.I<WalletRepository>().cachedConnection();
+      if (wallet == null) {
+        throw WalletException(
+          'Wallet session lost. Reconnect from onboarding.',
+          kind: WalletExceptionKind.userCancelled,
+        );
+      }
+      final result = await GetIt.I<DevAirdropService>().airdrop(
+        walletPubkeyBase58: wallet.pubkeyBase58,
+      );
+      if (!mounted) return;
+      HapticFeedback.lightImpact();
+      setState(() {
+        _airdropping = false;
+        _airdropOk = 'Received ${result.amountUsdc} dev USDC. Tap Deposit to retry.';
+        _error = null;
+      });
+    } on DevAirdropException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _airdropping = false;
+        _error = OnchainErrorState(e.message);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _airdropping = false;
+        _error = OnchainErrorState('Airdrop failed: $e');
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -245,19 +304,114 @@ class _FundSheetBodyState extends State<_FundSheetBody> {
         if (_error != null) ...[
           const SizedBox(height: 14),
           OnchainErrorCard(error: _error!),
+          if (_showAirdrop) ...[
+            const SizedBox(height: 10),
+            _AirdropAction(
+              busy: _airdropping,
+              onTap: _airdrop,
+            ),
+          ],
+        ],
+        if (_airdropOk != null) ...[
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: AFColors.mintTint,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AFColors.mintDim),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.check_circle_outline,
+                    color: AFColors.mint, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _airdropOk!,
+                    style: const TextStyle(
+                      color: AFColors.fg,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
         const SizedBox(height: 22),
         _MintButton(
           label: _busy ? 'Authorizing…' : 'Deposit',
           icon: _busy ? null : Icons.arrow_downward,
-          onPressed: _busy ? null : _submit,
+          onPressed: (_busy || _airdropping) ? null : _submit,
         ),
         const SizedBox(height: 10),
         _GhostButton(
           label: 'Cancel',
-          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+          onPressed: (_busy || _airdropping)
+              ? null
+              : () => Navigator.of(context).pop(false),
         ),
       ],
+    );
+  }
+}
+
+class _AirdropAction extends StatelessWidget {
+  const _AirdropAction({required this.busy, required this.onTap});
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AFColors.mintTint,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AFColors.mintDim),
+      ),
+      child: InkWell(
+        onTap: busy ? null : onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              if (busy)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AFColors.mint,
+                  ),
+                )
+              else
+                const Icon(Icons.water_drop_outlined,
+                    color: AFColors.mint, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  busy
+                      ? 'Requesting devnet USDC…'
+                      : 'Get 1,000 devnet USDC (one-tap)',
+                  style: const TextStyle(
+                    color: AFColors.fg,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (!busy)
+                const Icon(Icons.chevron_right,
+                    color: AFColors.mint, size: 18),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

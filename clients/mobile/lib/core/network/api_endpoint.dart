@@ -38,4 +38,8 @@ class ApiEndpoint {
   static const spendsRequest = '/api/spends/request';
   static String spendApprove(int id) => '/api/spends/$id/approve';
   static String spendReject(int id) => '/api/spends/$id/reject';
+
+  // Dev-only: returns 404 unless the backend was started with
+  // AGENT_FUEL_USDC_MINT_AUTHORITY_PATH set.
+  static const devAirdrop = '/api/dev/airdrop';
 }
