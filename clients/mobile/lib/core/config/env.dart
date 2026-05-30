@@ -23,7 +23,7 @@ class AppEnv {
   // Override at build time when targeting mainnet.
   static const usdcMint = String.fromEnvironment(
     'AGENT_FUEL_USDC_MINT',
-    defaultValue: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+    defaultValue: 'EMm5UveNWJaTfbMcJ8g2w7i2riydKKyZWhauEj8DzRTq',
   );
 
   static const identityName = 'Agent Fuel';

@@ -25,7 +25,7 @@ use serde_json::{json, Value};
 
 const REPUTATION_PROGRAM: &str = "4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ";
 const CREDIT_VAULT_PROGRAM: &str = "EsykPsafhHUeN7jA9DGqBiGuBsTBaFynLDVVpE4jFXDg";
-const USDC_MINT_DEVNET: &str = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+const USDC_MINT_DEVNET: &str = "EMm5UveNWJaTfbMcJ8g2w7i2riydKKyZWhauEj8DzRTq";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Mirror main.rs: examples run with CWD=backend/ where `.env` isn't, so

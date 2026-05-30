@@ -69,7 +69,7 @@ struct SpendArgs {
     #[arg(
         long,
         env = "AF_USDC_MINT",
-        default_value = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+        default_value = "EMm5UveNWJaTfbMcJ8g2w7i2riydKKyZWhauEj8DzRTq"
     )]
     usdc_mint: String,
 
