@@ -9,24 +9,23 @@
 // The agent JSON key file is the same 64-byte `[seed || pubkey]` format
 // that `solana-keygen` writes and the Agent Fuel mobile app exports.
 
-use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Args, Parser, Subcommand};
-use sha2::{Digest, Sha256};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::pubkey;
 use solana_sdk::transaction::Transaction;
 
-const ATA_PROGRAM_ID: Pubkey =
-    pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-const SYSTEM_PROGRAM_ID: Pubkey = pubkey!("11111111111111111111111111111111");
+use agent_fuel_runtime::{
+    anchor_discriminator, derive_ata, derive_pending_spend, derive_policy, derive_vault,
+    expand_tilde, fetch_pending_count, load_keypair, request_spend_ix, spend_ix,
+    SYSTEM_PROGRAM_ID,
+};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -45,6 +44,12 @@ enum Command {
     Spend(SpendArgs),
     /// Queue an over-limit spend for owner approval.
     RequestSpend(SpendArgs),
+    /// Register a service so agents can spend against it. The service keypair
+    /// is its long-lived signing identity (lives in `SpendPolicy.whitelist`,
+    /// signs reputation events) and co-signs registration to prevent
+    /// front-running. Idempotent only at the keypair level — re-running with
+    /// the same key reverts because the PDA already exists.
+    RegisterService(RegisterServiceArgs),
 }
 
 #[derive(Args, Debug)]
@@ -94,6 +99,49 @@ struct SpendArgs {
     dry_run: bool,
 }
 
+#[derive(Args, Debug)]
+struct RegisterServiceArgs {
+    /// Path to the sponsor wallet keypair (pays rent, submits tx).
+    #[arg(long, env = "AF_SPONSOR_KEY", default_value = "~/.config/solana/id.json")]
+    sponsor_key: PathBuf,
+
+    /// Path to the service keypair (its long-lived signing identity).
+    #[arg(long, env = "AF_SERVICE_KEY")]
+    service_key: PathBuf,
+
+    /// Display name (≤32 chars, ASCII).
+    #[arg(long)]
+    name: String,
+
+    /// Category: data-feed | compute | swap | rpc | other.
+    #[arg(long, default_value = "other")]
+    category: String,
+
+    /// Off-chain metadata URI (≤128 chars). Defaults to empty.
+    #[arg(long, default_value = "")]
+    uri: String,
+
+    /// reputation program ID. Defaults to the devnet deployment.
+    #[arg(
+        long,
+        env = "AF_REPUTATION_PROGRAM",
+        default_value = "4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ"
+    )]
+    reputation_program: String,
+
+    /// JSON-RPC endpoint.
+    #[arg(
+        long,
+        env = "AF_RPC_URL",
+        default_value = "https://api.devnet.solana.com"
+    )]
+    rpc_url: String,
+
+    /// Print the prepared instruction and exit without sending.
+    #[arg(long)]
+    dry_run: bool,
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -107,6 +155,123 @@ fn main() -> Result<()> {
     match cli.command {
         Command::Spend(a) => Action::from_args(a)?.run_spend(),
         Command::RequestSpend(a) => Action::from_args(a)?.run_request_spend(),
+        Command::RegisterService(a) => run_register_service(a),
+    }
+}
+
+fn run_register_service(a: RegisterServiceArgs) -> Result<()> {
+    let sponsor = load_keypair(&expand_tilde(&a.sponsor_key))?;
+    let service = load_keypair(&expand_tilde(&a.service_key))?;
+    let program = Pubkey::from_str(&a.reputation_program)
+        .with_context(|| format!("invalid reputation_program: {}", a.reputation_program))?;
+
+    let name_bytes = pack_fixed::<32>(&a.name, "name")?;
+    let uri_bytes = pack_fixed::<128>(&a.uri, "uri")?;
+    let category = parse_category(&a.category)?;
+
+    let service_pk = service.pubkey();
+    let registry = Pubkey::find_program_address(
+        &[b"service", service_pk.as_ref()],
+        &program,
+    )
+    .0;
+
+    tracing::info!(
+        sponsor = %sponsor.pubkey(),
+        service = %service_pk,
+        registry = %registry,
+        name = %a.name,
+        category = ?category,
+        "preparing register_service"
+    );
+
+    let ix = register_service_ix(
+        &program,
+        &sponsor.pubkey(),
+        &service_pk,
+        &registry,
+        name_bytes,
+        category,
+        uri_bytes,
+    );
+
+    if a.dry_run {
+        println!("dry-run: register_service(name={:?}, category={:?})", a.name, category);
+        println!("  sponsor:   {}", sponsor.pubkey());
+        println!("  service:   {service_pk}");
+        println!("  registry:  {registry}");
+        return Ok(());
+    }
+
+    let rpc = RpcClient::new_with_commitment(a.rpc_url, CommitmentConfig::confirmed());
+    let blockhash = rpc
+        .get_latest_blockhash()
+        .context("failed to fetch recent blockhash")?;
+    let tx = Transaction::new_signed_with_payer(
+        &[ix],
+        Some(&sponsor.pubkey()),
+        &[&sponsor, &service],
+        blockhash,
+    );
+    let sig = rpc
+        .send_and_confirm_transaction(&tx)
+        .context("transaction failed")?;
+    println!("ok: {sig}");
+    println!("  service:   {service_pk}");
+    println!("  registry:  {registry}");
+    Ok(())
+}
+
+fn register_service_ix(
+    program: &Pubkey,
+    sponsor: &Pubkey,
+    service: &Pubkey,
+    registry: &Pubkey,
+    name: [u8; 32],
+    category: u8,
+    uri: [u8; 128],
+) -> Instruction {
+    let mut data = Vec::with_capacity(8 + 32 + 1 + 128);
+    data.extend_from_slice(&anchor_discriminator(b"global:register_service"));
+    data.extend_from_slice(&name);
+    data.push(category);
+    data.extend_from_slice(&uri);
+
+    Instruction {
+        program_id: *program,
+        accounts: vec![
+            AccountMeta::new(*sponsor, true),
+            AccountMeta::new_readonly(*service, true),
+            AccountMeta::new(*registry, false),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
+        ],
+        data,
+    }
+}
+
+fn pack_fixed<const N: usize>(s: &str, field: &str) -> Result<[u8; N]> {
+    let bytes = s.as_bytes();
+    if bytes.len() > N {
+        return Err(anyhow!(
+            "{field} too long: {} bytes (max {N})",
+            bytes.len()
+        ));
+    }
+    let mut out = [0u8; N];
+    out[..bytes.len()].copy_from_slice(bytes);
+    Ok(out)
+}
+
+fn parse_category(s: &str) -> Result<u8> {
+    match s.to_ascii_lowercase().as_str() {
+        "data-feed" | "datafeed" | "data_feed" => Ok(0),
+        "compute" => Ok(1),
+        "swap" => Ok(2),
+        "rpc" => Ok(3),
+        "other" => Ok(4),
+        _ => Err(anyhow!(
+            "unknown category {s:?} — expected one of: data-feed, compute, swap, rpc, other"
+        )),
     }
 }
 
@@ -259,125 +424,3 @@ impl Action {
     }
 }
 
-fn spend_ix(
-    program: &Pubkey,
-    agent: &Pubkey,
-    vault: &Pubkey,
-    policy: &Pubkey,
-    vault_ata: &Pubkey,
-    service_ata: &Pubkey,
-    amount_micro: u64,
-) -> Instruction {
-    let mut data = Vec::with_capacity(16);
-    data.extend_from_slice(&anchor_discriminator(b"global:spend"));
-    data.extend_from_slice(&amount_micro.to_le_bytes());
-
-    Instruction {
-        program_id: *program,
-        accounts: vec![
-            AccountMeta::new_readonly(*agent, true),
-            AccountMeta::new(*vault, false),
-            AccountMeta::new(*policy, false),
-            AccountMeta::new(*vault_ata, false),
-            AccountMeta::new(*service_ata, false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-        ],
-        data,
-    }
-}
-
-fn request_spend_ix(
-    program: &Pubkey,
-    agent: &Pubkey,
-    vault: &Pubkey,
-    service_ata: &Pubkey,
-    pending_spend: &Pubkey,
-    amount_micro: u64,
-) -> Instruction {
-    let mut data = Vec::with_capacity(16);
-    data.extend_from_slice(&anchor_discriminator(b"global:request_spend"));
-    data.extend_from_slice(&amount_micro.to_le_bytes());
-
-    Instruction {
-        program_id: *program,
-        accounts: vec![
-            // agent is `mut` here because it pays rent for the new PendingSpend.
-            AccountMeta::new(*agent, true),
-            AccountMeta::new(*vault, false),
-            AccountMeta::new_readonly(*service_ata, false),
-            AccountMeta::new(*pending_spend, false),
-            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-        ],
-        data,
-    }
-}
-
-fn derive_vault(program: &Pubkey, owner: &Pubkey, agent: &Pubkey) -> Pubkey {
-    Pubkey::find_program_address(&[b"vault", owner.as_ref(), agent.as_ref()], program).0
-}
-
-fn derive_policy(program: &Pubkey, vault: &Pubkey) -> Pubkey {
-    Pubkey::find_program_address(&[b"policy", vault.as_ref()], program).0
-}
-
-fn derive_ata(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
-    Pubkey::find_program_address(
-        &[owner.as_ref(), spl_token::id().as_ref(), mint.as_ref()],
-        &ATA_PROGRAM_ID,
-    )
-    .0
-}
-
-fn derive_pending_spend(program: &Pubkey, vault: &Pubkey, nonce: u64) -> Pubkey {
-    Pubkey::find_program_address(
-        &[b"pending", vault.as_ref(), &nonce.to_le_bytes()],
-        program,
-    )
-    .0
-}
-
-// Offset of `pending_count` inside the CreditVault account, computed from
-// state.rs:
-//   8 (disc) + 32*4 (owner/agent/usdc_mint/vault_token_account) + 8*4
-//   (total_*) + 1 (frozen) + 8*2 (slots) + 1 (bump) = 186.
-const PENDING_COUNT_OFFSET: usize = 186;
-
-fn fetch_pending_count(rpc: &RpcClient, vault: &Pubkey) -> Result<u64> {
-    let account = rpc
-        .get_account(vault)
-        .with_context(|| format!("vault account not found: {vault}"))?;
-    let data = account.data;
-    if data.len() < PENDING_COUNT_OFFSET + 8 {
-        return Err(anyhow!(
-            "vault account too small ({} bytes) to read pending_count",
-            data.len()
-        ));
-    }
-    let mut buf = [0u8; 8];
-    buf.copy_from_slice(&data[PENDING_COUNT_OFFSET..PENDING_COUNT_OFFSET + 8]);
-    Ok(u64::from_le_bytes(buf))
-}
-
-fn anchor_discriminator(name: &[u8]) -> [u8; 8] {
-    let mut h = Sha256::new();
-    h.update(name);
-    let out = h.finalize();
-    let mut disc = [0u8; 8];
-    disc.copy_from_slice(&out[..8]);
-    disc
-}
-
-fn load_keypair(path: &PathBuf) -> Result<Keypair> {
-    let raw = fs::read_to_string(path)
-        .with_context(|| format!("failed to read key file: {}", path.display()))?;
-    let bytes: Vec<u8> = serde_json::from_str(&raw)
-        .with_context(|| format!("key file is not a JSON byte array: {}", path.display()))?;
-    if bytes.len() != 64 {
-        return Err(anyhow!(
-            "expected 64-byte [seed || pubkey] key, got {} bytes",
-            bytes.len()
-        ));
-    }
-    Keypair::try_from(bytes.as_slice())
-        .map_err(|e| anyhow!("invalid ed25519 keypair bytes: {e}"))
-}

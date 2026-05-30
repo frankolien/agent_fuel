@@ -1,0 +1,360 @@
+// Library surface of the Agent Fuel runtime.
+//
+// `main.rs` is the CLI front end (`agent-runtime spend`, `register-service`,
+// etc). Anything that should be reusable from external agents — instruction
+// builders, PDA derivations, the high-level [`Spender`] convenience — lives
+// here so other binaries / `examples/*.rs` can `use agent_fuel_runtime::…`.
+
+use std::fs;
+use std::path::PathBuf;
+
+use anyhow::{anyhow, Context, Result};
+use sha2::{Digest, Sha256};
+use solana_client::client_error::{ClientError, ClientErrorKind};
+use solana_client::rpc_client::RpcClient;
+use solana_client::rpc_request::RpcError;
+use solana_client::rpc_response::RpcSimulateTransactionResult;
+use solana_sdk::instruction::{AccountMeta, Instruction};
+use solana_sdk::pubkey;
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, Signature, Signer};
+use solana_sdk::transaction::Transaction;
+
+pub const ATA_PROGRAM_ID: Pubkey =
+    pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+pub const SYSTEM_PROGRAM_ID: Pubkey = pubkey!("11111111111111111111111111111111");
+
+pub fn derive_vault(program: &Pubkey, owner: &Pubkey, agent: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"vault", owner.as_ref(), agent.as_ref()], program).0
+}
+
+pub fn derive_policy(program: &Pubkey, vault: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"policy", vault.as_ref()], program).0
+}
+
+pub fn derive_ata(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(
+        &[owner.as_ref(), spl_token::id().as_ref(), mint.as_ref()],
+        &ATA_PROGRAM_ID,
+    )
+    .0
+}
+
+pub fn derive_pending_spend(program: &Pubkey, vault: &Pubkey, nonce: u64) -> Pubkey {
+    Pubkey::find_program_address(
+        &[b"pending", vault.as_ref(), &nonce.to_le_bytes()],
+        program,
+    )
+    .0
+}
+
+// Reputation-program PDAs. Kept here so the example bot and any external
+// agent code share the same derivation as `register-service` / record_payment.
+
+pub fn derive_agent_profile(reputation_program: &Pubkey, agent: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"agent", agent.as_ref()], reputation_program).0
+}
+
+pub fn derive_service_registry(reputation_program: &Pubkey, service: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[b"service", service.as_ref()], reputation_program).0
+}
+
+pub fn derive_agent_service_link(
+    reputation_program: &Pubkey,
+    agent_profile: &Pubkey,
+    service_registry: &Pubkey,
+) -> Pubkey {
+    Pubkey::find_program_address(
+        &[b"link", agent_profile.as_ref(), service_registry.as_ref()],
+        reputation_program,
+    )
+    .0
+}
+
+pub fn derive_receipt_used(reputation_program: &Pubkey, receipt_hash: &[u8; 32]) -> Pubkey {
+    Pubkey::find_program_address(&[b"receipt", receipt_hash], reputation_program).0
+}
+
+/// Builds the reputation-program `record_payment` instruction. The service
+/// is the signer — agents cannot call this on their own behalf (the on-chain
+/// design's anti-fake-rep guarantee). For dogfood scenarios where the same
+/// operator controls both the agent and the service, the example bot signs
+/// twice in the same tx.
+#[allow(clippy::too_many_arguments)]
+pub fn record_payment_ix(
+    reputation_program: &Pubkey,
+    service: &Pubkey,
+    agent_profile: &Pubkey,
+    service_registry: &Pubkey,
+    agent_service_link: &Pubkey,
+    receipt_used: &Pubkey,
+    amount_usdc: u64,
+    receipt_hash: [u8; 32],
+) -> Instruction {
+    let mut data = Vec::with_capacity(8 + 8 + 32);
+    data.extend_from_slice(&anchor_discriminator(b"global:record_payment"));
+    data.extend_from_slice(&amount_usdc.to_le_bytes());
+    data.extend_from_slice(&receipt_hash);
+
+    Instruction {
+        program_id: *reputation_program,
+        accounts: vec![
+            AccountMeta::new(*service, true),
+            AccountMeta::new(*agent_profile, false),
+            AccountMeta::new(*service_registry, false),
+            AccountMeta::new(*agent_service_link, false),
+            AccountMeta::new(*receipt_used, false),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
+        ],
+        data,
+    }
+}
+
+pub fn anchor_discriminator(name: &[u8]) -> [u8; 8] {
+    let mut h = Sha256::new();
+    h.update(name);
+    let out = h.finalize();
+    let mut disc = [0u8; 8];
+    disc.copy_from_slice(&out[..8]);
+    disc
+}
+
+pub fn spend_ix(
+    program: &Pubkey,
+    agent: &Pubkey,
+    vault: &Pubkey,
+    policy: &Pubkey,
+    vault_ata: &Pubkey,
+    service_ata: &Pubkey,
+    amount_micro: u64,
+) -> Instruction {
+    let mut data = Vec::with_capacity(16);
+    data.extend_from_slice(&anchor_discriminator(b"global:spend"));
+    data.extend_from_slice(&amount_micro.to_le_bytes());
+
+    Instruction {
+        program_id: *program,
+        accounts: vec![
+            AccountMeta::new_readonly(*agent, true),
+            AccountMeta::new(*vault, false),
+            AccountMeta::new(*policy, false),
+            AccountMeta::new(*vault_ata, false),
+            AccountMeta::new(*service_ata, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data,
+    }
+}
+
+pub fn request_spend_ix(
+    program: &Pubkey,
+    agent: &Pubkey,
+    vault: &Pubkey,
+    service_ata: &Pubkey,
+    pending_spend: &Pubkey,
+    amount_micro: u64,
+) -> Instruction {
+    let mut data = Vec::with_capacity(16);
+    data.extend_from_slice(&anchor_discriminator(b"global:request_spend"));
+    data.extend_from_slice(&amount_micro.to_le_bytes());
+
+    Instruction {
+        program_id: *program,
+        accounts: vec![
+            // agent is `mut` here because it pays rent for the new PendingSpend.
+            AccountMeta::new(*agent, true),
+            AccountMeta::new(*vault, false),
+            AccountMeta::new_readonly(*service_ata, false),
+            AccountMeta::new(*pending_spend, false),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
+        ],
+        data,
+    }
+}
+
+// Offset of `pending_count` inside the CreditVault account, computed from
+// state.rs:
+//   8 (disc) + 32*4 (owner/agent/usdc_mint/vault_token_account) + 8*4
+//   (total_*) + 1 (frozen) + 8*2 (slots) + 1 (bump) = 186.
+pub const PENDING_COUNT_OFFSET: usize = 186;
+
+pub fn fetch_pending_count(rpc: &RpcClient, vault: &Pubkey) -> Result<u64> {
+    let account = rpc
+        .get_account(vault)
+        .with_context(|| format!("vault account not found: {vault}"))?;
+    let data = account.data;
+    if data.len() < PENDING_COUNT_OFFSET + 8 {
+        return Err(anyhow!(
+            "vault account too small ({} bytes) to read pending_count",
+            data.len()
+        ));
+    }
+    let mut buf = [0u8; 8];
+    buf.copy_from_slice(&data[PENDING_COUNT_OFFSET..PENDING_COUNT_OFFSET + 8]);
+    Ok(u64::from_le_bytes(buf))
+}
+
+pub fn load_keypair(path: &PathBuf) -> Result<Keypair> {
+    let raw = fs::read_to_string(path)
+        .with_context(|| format!("failed to read key file: {}", path.display()))?;
+    let bytes: Vec<u8> = serde_json::from_str(&raw)
+        .with_context(|| format!("key file is not a JSON byte array: {}", path.display()))?;
+    if bytes.len() != 64 {
+        return Err(anyhow!(
+            "expected 64-byte [seed || pubkey] key, got {} bytes",
+            bytes.len()
+        ));
+    }
+    Keypair::try_from(bytes.as_slice())
+        .map_err(|e| anyhow!("invalid ed25519 keypair bytes: {e}"))
+}
+
+// Pulls the most actionable line out of an RPC error chain — preflight
+// simulations carry `logs: Vec<String>` which usually contain the program's
+// own AnchorError message. We prefer those over the generic "custom program
+// error: 0xN" wrapper. Returns a one-line summary, joining program log lines
+// with " | " so the tail is greppable.
+pub fn summarize_rpc_error(err: &ClientError) -> String {
+    if let ClientErrorKind::RpcError(RpcError::RpcResponseError {
+        data:
+            solana_client::rpc_request::RpcResponseErrorData::SendTransactionPreflightFailure(
+                RpcSimulateTransactionResult {
+                    logs: Some(lines), ..
+                },
+            ),
+        message,
+        ..
+    }) = err.kind()
+    {
+        let interesting: Vec<&str> = lines
+            .iter()
+            .map(String::as_str)
+            .filter(|l| {
+                l.contains("AnchorError")
+                    || l.contains("Error:")
+                    || l.contains("failed")
+                    || l.contains("Allocate:")
+            })
+            .collect();
+        if !interesting.is_empty() {
+            return format!("{message} | logs: {}", interesting.join(" | "));
+        }
+        return format!("{message} | logs: {}", lines.join(" | "));
+    }
+    err.to_string()
+}
+
+pub fn expand_tilde(path: &PathBuf) -> PathBuf {
+    let s = path.to_string_lossy();
+    if let Some(rest) = s.strip_prefix("~/") {
+        if let Some(home) = std::env::var_os("HOME") {
+            return PathBuf::from(home).join(rest);
+        }
+    }
+    path.clone()
+}
+
+/// High-level convenience for "agent pays a service" flows. Embeds the agent
+/// keypair, target service, mint, program IDs, and an RPC client; exposes
+/// `spend(amount_micro)` for raw vault drains, and `pay(amount, service_kp)`
+/// which atomically does spend + reputation record_payment in a single tx so
+/// the agent's volume / score actually accrues. Reputation requires a
+/// service signer because services attest to having received payment — the
+/// agent can't fake its own rep.
+///
+/// Construct once at startup, call repeatedly from the agent's main loop.
+pub struct Spender {
+    pub agent: Keypair,
+    pub owner: Pubkey,
+    pub service: Pubkey,
+    pub usdc_mint: Pubkey,
+    pub program: Pubkey,
+    pub reputation_program: Pubkey,
+    pub rpc: RpcClient,
+}
+
+impl Spender {
+    pub fn spend(&self, amount_micro: u64) -> Result<Signature> {
+        let ix = self.build_spend_ix(amount_micro);
+        self.submit(&[ix], &[&self.agent])
+    }
+
+    /// Atomic spend + record_payment. The service keypair signs the rep half.
+    /// The receipt hash must be unique per (agent, service, slot) call — a
+    /// repeat hash hits `AccountAlreadyInUse` and aborts the tx (anti-replay).
+    pub fn pay(
+        &self,
+        amount_micro: u64,
+        service_keypair: &Keypair,
+        receipt_hash: [u8; 32],
+    ) -> Result<Signature> {
+        let agent_pk = self.agent.pubkey();
+        let service_pk = service_keypair.pubkey();
+        if service_pk != self.service {
+            return Err(anyhow!(
+                "service keypair pubkey {service_pk} does not match Spender.service {}",
+                self.service
+            ));
+        }
+        let spend = self.build_spend_ix(amount_micro);
+
+        let agent_profile = derive_agent_profile(&self.reputation_program, &agent_pk);
+        let service_registry = derive_service_registry(&self.reputation_program, &service_pk);
+        let agent_service_link = derive_agent_service_link(
+            &self.reputation_program,
+            &agent_profile,
+            &service_registry,
+        );
+        let receipt_used = derive_receipt_used(&self.reputation_program, &receipt_hash);
+
+        let record = record_payment_ix(
+            &self.reputation_program,
+            &service_pk,
+            &agent_profile,
+            &service_registry,
+            &agent_service_link,
+            &receipt_used,
+            amount_micro,
+            receipt_hash,
+        );
+
+        self.submit(&[spend, record], &[&self.agent, service_keypair])
+    }
+
+    // Sign, send, confirm. On `send_and_confirm_transaction` failure, the
+    // error chain already includes the simulation logs from the RPC client —
+    // but we wrap with the program log lines extracted from the chained
+    // error so a tail-only operator log surface is enough to diagnose.
+    fn submit(&self, ixs: &[Instruction], signers: &[&Keypair]) -> Result<Signature> {
+        let agent_pk = self.agent.pubkey();
+        let blockhash = self
+            .rpc
+            .get_latest_blockhash()
+            .context("failed to fetch recent blockhash")?;
+        let tx = Transaction::new_signed_with_payer(ixs, Some(&agent_pk), signers, blockhash);
+        match self.rpc.send_and_confirm_transaction(&tx) {
+            Ok(sig) => Ok(sig),
+            Err(err) => {
+                let summary = summarize_rpc_error(&err);
+                Err(anyhow!("transaction failed: {summary}"))
+            }
+        }
+    }
+
+    fn build_spend_ix(&self, amount_micro: u64) -> Instruction {
+        let agent_pk = self.agent.pubkey();
+        let vault = derive_vault(&self.program, &self.owner, &agent_pk);
+        let policy = derive_policy(&self.program, &vault);
+        let vault_ata = derive_ata(&vault, &self.usdc_mint);
+        let service_ata = derive_ata(&self.service, &self.usdc_mint);
+        spend_ix(
+            &self.program,
+            &agent_pk,
+            &vault,
+            &policy,
+            &vault_ata,
+            &service_ata,
+            amount_micro,
+        )
+    }
+}

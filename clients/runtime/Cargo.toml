@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = { workspace = true }
 solana-sdk = { workspace = true }
@@ -22,6 +23,8 @@ solana-client = "2.2"
 spl-token = "8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Dogfood example (pyth_logger) pulls live BTC/USD from Hermes.
+ureq = { version = "2", features = ["json"] }
 
 [lints]
 workspace = true

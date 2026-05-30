@@ -363,6 +363,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "serde",
  "serde_json",
  "sha2 0.10.9",
  "solana-client",
@@ -370,6 +371,7 @@ dependencies = [
  "spl-token 8.0.0",
  "tracing",
  "tracing-subscriber",
+ "ureq",
 ]
 
 [[package]]
