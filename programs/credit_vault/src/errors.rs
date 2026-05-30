@@ -22,5 +22,9 @@ pub enum VaultError {
     NotFrozen,
     #[msg("Post-pay claims are disabled for this vault")]
     PostPayDisabled,
+    #[msg("Pending spend belongs to a different vault")]
+    PendingSpendVaultMismatch,
+    #[msg("Pending spend counter would overflow")]
+    PendingNonceOverflow,
 }
 /*https://claude.ai/design/p/d9deb5a3-04e6-465e-9790-21751c821439?file=Agent+Fuel+Mobile.html&via=share */

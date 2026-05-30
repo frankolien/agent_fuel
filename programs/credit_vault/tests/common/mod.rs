@@ -282,3 +282,11 @@ pub fn build_spend_ix(
         .data(),
     }
 }
+
+pub fn derive_pending_spend_pda(vault: &Pubkey, nonce: u64) -> Pubkey {
+    Pubkey::find_program_address(
+        &[b"pending", vault.as_ref(), &nonce.to_le_bytes()],
+        &credit_vault::ID,
+    )
+    .0
+}

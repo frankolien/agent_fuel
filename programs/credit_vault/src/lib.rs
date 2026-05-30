@@ -87,4 +87,16 @@ pub mod credit_vault {
     pub fn claim(ctx: Context<Claim>, amount_usdc: u64) -> Result<()> {
         instructions::claim::handler(ctx, amount_usdc)
     }
+
+    pub fn request_spend(ctx: Context<RequestSpend>, amount_usdc: u64) -> Result<()> {
+        instructions::request_spend::handler(ctx, amount_usdc)
+    }
+
+    pub fn approve_spend(ctx: Context<ApproveSpend>) -> Result<()> {
+        instructions::approve_spend::handler(ctx)
+    }
+
+    pub fn cancel_spend(ctx: Context<CancelSpend>) -> Result<()> {
+        instructions::cancel_spend::handler(ctx)
+    }
 }

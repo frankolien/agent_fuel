@@ -75,3 +75,23 @@ pub struct Withdrawn {
     pub new_total_withdrawn: u64,
     pub slot: u64,
 }
+
+#[event]
+pub struct SpendRequested {
+    pub vault: Pubkey,
+    pub agent: Pubkey,
+    pub service: Pubkey,
+    pub pending_spend: Pubkey,
+    pub amount_usdc: u64,
+    pub nonce: u64,
+    pub slot: u64,
+}
+
+#[event]
+pub struct SpendRejected {
+    pub vault: Pubkey,
+    pub owner: Pubkey,
+    pub pending_spend: Pubkey,
+    pub nonce: u64,
+    pub slot: u64,
+}

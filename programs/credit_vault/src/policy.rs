@@ -68,7 +68,7 @@ pub fn check_and_record_spend(
 }
 
 // All-zero whitelist == no enforcement. Otherwise recipient must match.
-fn check_whitelist(whitelist: &[Pubkey], recipient: &Pubkey) -> Result<()> {
+pub fn check_whitelist(whitelist: &[Pubkey], recipient: &Pubkey) -> Result<()> {
     let default = Pubkey::default();
     let any_set = whitelist.iter().any(|p| p != &default);
     if !any_set {
