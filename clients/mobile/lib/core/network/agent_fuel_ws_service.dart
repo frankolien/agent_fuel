@@ -14,11 +14,12 @@ import '../config/env.dart';
 ///   - Reconnect backoff: 1, 2, 4, 8, 16, 30 s.
 ///   - Drops the socket on background, reopens on resume.
 class AgentFuelWsService with WidgetsBindingObserver {
-  AgentFuelWsService({required this.onChange}) {
+  AgentFuelWsService({required this.onChange, this.onMessage}) {
     WidgetsBinding.instance.addObserver(this);
   }
 
   final void Function() onChange;
+  final void Function(String payload)? onMessage;
 
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _sub;
@@ -88,8 +89,12 @@ class AgentFuelWsService with WidgetsBindingObserver {
       });
 
       _sub = channel.stream.listen(
-        (_) {
-          if (!_stopped) onChange();
+        (payload) {
+          if (_stopped) return;
+          if (onMessage != null && payload is String) {
+            onMessage!(payload);
+          }
+          onChange();
         },
         onError: (Object _) => _scheduleReconnect(),
         onDone: _scheduleReconnect,

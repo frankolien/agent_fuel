@@ -7,6 +7,8 @@ import 'package:get_it/get_it.dart';
 
 import '../../../../app/router.dart';
 import '../../../../app/theme.dart';
+import '../../../alerts/data/repositories/alerts_repository.dart';
+import '../../../onboarding/presentation/bloc/onboarding_bloc.dart';
 import '../../../wallet/data/repositories/wallet_repository.dart';
 import '../activity/activity_feed.dart';
 import '../activity/activity_screen.dart';
@@ -55,6 +57,11 @@ class _FleetViewState extends State<_FleetView> {
     context
         .read<FleetBloc>()
         .add(FleetLoadRequested(ownerPubkey: cached?.pubkeyBase58));
+    if (cached != null) {
+      final alerts = GetIt.I<AlertsRepository>();
+      alerts.watch(cached.pubkeyBase58);
+      alerts.refresh(silent: true);
+    }
   }
 
   @override
@@ -78,9 +85,13 @@ class _FleetViewState extends State<_FleetView> {
               left: 14,
               right: 14,
               bottom: 14,
-              child: _FloatingTabBar(
-                current: _tab,
-                onChanged: (t) => setState(() => _tab = t),
+              child: ListenableBuilder(
+                listenable: GetIt.I<AlertsRepository>(),
+                builder: (_, __) => _FloatingTabBar(
+                  current: _tab,
+                  unreadCount: GetIt.I<AlertsRepository>().unreadCount,
+                  onChanged: (t) => setState(() => _tab = t),
+                ),
               ),
             ),
           ],
@@ -667,22 +678,70 @@ class _ListLabelRow extends StatelessWidget {
           ),
           const Spacer(),
           Text(
-            '$count · Sort',
+            '$count',
             style: const TextStyle(
               color: AFColors.muted,
               fontSize: 13.5,
             ),
           ),
+          const SizedBox(width: 10),
+          _AddAgentButton(),
         ],
       ),
     );
   }
 }
 
+class _AddAgentButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AFColors.mintTint,
+      shape: const StadiumBorder(
+        side: BorderSide(color: AFColors.mintDim),
+      ),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: () {
+          OnboardingBloc.addAgentMode = true;
+          context.router.push(const OnboardingRoute());
+        },
+        child: const Padding(
+          padding: EdgeInsets.fromLTRB(11, 0, 14, 0),
+          child: SizedBox(
+            height: 38,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.add, color: AFColors.mint, size: 17),
+                SizedBox(width: 5),
+                Text(
+                  'Add',
+                  style: TextStyle(
+                    color: AFColors.mint,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FloatingTabBar extends StatelessWidget {
-  const _FloatingTabBar({required this.current, required this.onChanged});
+  const _FloatingTabBar({
+    required this.current,
+    required this.onChanged,
+    this.unreadCount = 0,
+  });
   final _HomeTab current;
   final ValueChanged<_HomeTab> onChanged;
+  final int unreadCount;
 
   @override
   Widget build(BuildContext context) {
@@ -728,7 +787,7 @@ class _FloatingTabBar extends StatelessWidget {
                 label: 'Alerts',
                 selected: current == _HomeTab.alerts,
                 onTap: () => onChanged(_HomeTab.alerts),
-                badge: true,
+                badge: unreadCount > 0,
               ),
             ],
           ),
@@ -868,15 +927,15 @@ class _EmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.bolt_outlined, color: AFColors.mint, size: 40),
-            SizedBox(height: 14),
-            Text(
+            const Icon(Icons.bolt_outlined, color: AFColors.mint, size: 40),
+            const SizedBox(height: 14),
+            const Text(
               'No agents yet',
               style: TextStyle(
                 color: AFColors.fg,
@@ -884,12 +943,29 @@ class _EmptyView extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(height: 6),
-            Text(
-              'Your fleet is empty. Finish onboarding to spin up your first '
-              'agent and start tracking spend in real time.',
+            const SizedBox(height: 6),
+            const Text(
+              'Your fleet is empty. Spin up your first agent to start tracking '
+              'spend, reputation, and policy events in real time.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AFColors.muted, height: 1.5),
+            ),
+            const SizedBox(height: 22),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AFColors.mint,
+                foregroundColor: const Color(0xFF08090B),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              ),
+              onPressed: () {
+                OnboardingBloc.addAgentMode = true;
+                context.router.push(const OnboardingRoute());
+              },
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text(
+                'Add agent',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ),

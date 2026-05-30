@@ -1,8 +1,12 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
+import 'package:get_it/get_it.dart';
 
 import '../../../../app/theme.dart';
+import '../../../agent_keys/data/datasources/agent_key_store.dart';
+import '../../../agent_keys/presentation/export_key_sheet.dart';
 import '../../domain/entities/agent.dart';
 import '../sheets/vault_action_sheets.dart';
 
@@ -153,7 +157,147 @@ class _DetailHero extends StatelessWidget {
               _AddrPill(label: 'OWNER', value: agent.owner, mono: mono),
             ],
           ),
+          _KeyStateRow(agent: agent),
         ],
+      ),
+    );
+  }
+}
+
+/// Shows one of three states based on whether this device holds the agent's
+/// ed25519 seed:
+///   * has seed → mint "Export agent key" chip
+///   * no seed, no on-chain funds → nothing (don't nag the user)
+///   * no seed, vault has USDC → red "Recover funds" banner
+class _KeyStateRow extends StatelessWidget {
+  const _KeyStateRow({required this.agent});
+  final Agent agent;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: GetIt.I<AgentKeyStore>().has(agent.pubkey),
+      builder: (context, snap) {
+        if (!snap.hasData) return const SizedBox.shrink();
+        if (snap.data == true) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Material(
+                color: AFColors.mintTint,
+                shape: const StadiumBorder(),
+                child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  onTap: () => showExportAgentKeySheet(
+                    context,
+                    agentPubkey: agent.pubkey,
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.key, color: AFColors.mint, size: 14),
+                        SizedBox(width: 6),
+                        Text(
+                          'Export agent key',
+                          style: TextStyle(
+                            color: AFColors.mint,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+        return _OrphanedBanner(agent: agent);
+      },
+    );
+  }
+}
+
+class _OrphanedBanner extends StatelessWidget {
+  const _OrphanedBanner({required this.agent});
+  final Agent agent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Material(
+        color: const Color(0x14E08577),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: Color(0x4DE08577)),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () async {
+            final ok = await showRecoverSheet(context, agent);
+            if (ok == true && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  backgroundColor: AFColors.surface2,
+                  content: Text(
+                    'Funds recovered to wallet',
+                    style: TextStyle(color: AFColors.fg),
+                  ),
+                ),
+              );
+            }
+          },
+          child: const Padding(
+            padding: EdgeInsets.fromLTRB(14, 12, 12, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  color: AFColors.danger,
+                  size: 20,
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "This device can't sign for this agent",
+                        style: TextStyle(
+                          color: AFColors.fg,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'Recover its USDC to your wallet, then create a new agent.',
+                        style: TextStyle(
+                          color: AFColors.muted,
+                          fontSize: 12.5,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right,
+                  color: AFColors.danger,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -171,36 +315,59 @@ class _AddrPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 26,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: AFColors.surface2,
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: AFColors.line),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: AFColors.muted,
-              fontSize: 10,
-              letterSpacing: 0.8,
-              fontWeight: FontWeight.w500,
+    return Material(
+      color: AFColors.surface2,
+      shape: const StadiumBorder(side: BorderSide(color: AFColors.line)),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: () async {
+          await Clipboard.setData(ClipboardData(text: value));
+          HapticFeedback.selectionClick();
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AFColors.surface2,
+              duration: const Duration(milliseconds: 1400),
+              content: Text(
+                '$label copied · ${_shortPubkey(value, 4)}',
+                style: const TextStyle(color: AFColors.fg),
+              ),
             ),
+          );
+        },
+        child: Container(
+          height: 26,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AFColors.muted,
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _shortPubkey(value, 4),
+                style: mono.bodySmall?.copyWith(
+                  color: AFColors.fg2,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.copy_rounded,
+                size: 11,
+                color: AFColors.muted,
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          Text(
-            _shortPubkey(value, 4),
-            style: mono.bodySmall?.copyWith(
-              color: AFColors.fg2,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

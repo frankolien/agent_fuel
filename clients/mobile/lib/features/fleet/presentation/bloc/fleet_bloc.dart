@@ -1,15 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/network/agent_fuel_ws_service.dart';
 import '../../../../core/network/api_endpoint.dart';
+import '../../../agent_keys/data/datasources/agent_seed_recovery_sweeper.dart';
 import '../../data/repositories/fleet_repository.dart';
 import '../../domain/entities/agent.dart';
 import 'fleet_event.dart';
 import 'fleet_state.dart';
 
 class FleetBloc extends Bloc<FleetEvent, FleetState> {
-  FleetBloc(this._repository) : super(const FleetInitial()) {
+  FleetBloc(this._repository, this._sweeper) : super(const FleetInitial()) {
     _ws = AgentFuelWsService(onChange: () {
       if (isClosed) return;
       add(const FleetLiveUpdateReceived());
@@ -21,6 +24,7 @@ class FleetBloc extends Bloc<FleetEvent, FleetState> {
   }
 
   final FleetRepository _repository;
+  final AgentSeedRecoverySweeper _sweeper;
   late final AgentFuelWsService _ws;
 
   static const _maxHistory = 32;
@@ -65,6 +69,13 @@ class FleetBloc extends Bloc<FleetEvent, FleetState> {
         _watchedAgentPubkey = firstPubkey;
         _ws.watch(ApiEndpoint.wsAgent(firstPubkey));
       }
+      // Best-effort: silently recover any locally-missing seeds from the
+      // wallet's cached master signature. Doesn't prompt; doesn't block.
+      // Detail pages re-check AgentKeyStore on next open, so freshly
+      // recovered agents stop showing the orphan banner without a reload.
+      unawaited(
+        _sweeper.sweep([for (final a in agents) a.pubkey]).catchError((_) => 0),
+      );
     } on ServerException catch (e) {
       if (e.statusCode == 401 || e.statusCode == 403) {
         emit(const FleetWalletRequired());

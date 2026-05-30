@@ -28,4 +28,14 @@ class ApiEndpoint {
   static String wsAgent(String pubkey) => '/ws/agents/$pubkey';
   static String wsVault(String pubkey) => '/ws/vaults/$pubkey';
   static String wsService(String pubkey) => '/ws/services/$pubkey';
+  static String wsAlerts(String owner) => '/ws/alerts/$owner';
+
+  static const alerts = '/api/alerts';
+  static const alertsUnreadCount = '/api/alerts/unread-count';
+  static String alertRead(int id) => '/api/alerts/$id/read';
+  static const alertsReadAll = '/api/alerts/read-all';
+
+  static const spendsRequest = '/api/spends/request';
+  static String spendApprove(int id) => '/api/spends/$id/approve';
+  static String spendReject(int id) => '/api/spends/$id/reject';
 }

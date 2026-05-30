@@ -46,6 +46,18 @@ Future<bool?> showApproveSheet(BuildContext context, Agent agent) {
   );
 }
 
+Future<bool?> showRecoverSheet(BuildContext context, Agent agent) {
+  return showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    barrierColor: const Color(0x99000000),
+    builder: (_) => _SheetScaffold(
+      child: _RecoverSheetBody(agent: agent),
+    ),
+  );
+}
+
 class _SheetScaffold extends StatelessWidget {
   const _SheetScaffold({required this.child});
   final Widget child;
@@ -873,6 +885,361 @@ class _Row extends StatelessWidget {
       ),
     );
   }
+}
+
+// ============================================================================
+// RECOVER (orphaned-agent: owner-signed full withdraw)
+// ============================================================================
+
+class _RecoverSheetBody extends StatefulWidget {
+  const _RecoverSheetBody({required this.agent});
+  final Agent agent;
+
+  @override
+  State<_RecoverSheetBody> createState() => _RecoverSheetBodyState();
+}
+
+enum _RecoverPhase { loading, ready, busy, done, empty }
+
+class _RecoverSheetBodyState extends State<_RecoverSheetBody> {
+  _RecoverPhase _phase = _RecoverPhase.loading;
+  int _balanceMicro = 0;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBalance();
+  }
+
+  Future<void> _loadBalance() async {
+    try {
+      final wallet = await GetIt.I<WalletRepository>().cachedConnection();
+      if (wallet == null) {
+        throw WalletException(
+          'Wallet session lost. Reconnect from onboarding.',
+          kind: WalletExceptionKind.userCancelled,
+        );
+      }
+      final micro = await GetIt.I<VaultActionService>().fetchVaultBalanceMicro(
+        ownerPubkeyBase58: wallet.pubkeyBase58,
+        agentPubkeyBase58: widget.agent.pubkey,
+      );
+      if (!mounted) return;
+      setState(() {
+        _balanceMicro = micro;
+        _phase = micro > 0 ? _RecoverPhase.ready : _RecoverPhase.empty;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _phase = _RecoverPhase.ready;
+        _error = 'Could not read vault balance: $e';
+      });
+    }
+  }
+
+  Future<void> _recover() async {
+    if (_phase != _RecoverPhase.ready || _balanceMicro <= 0) return;
+    setState(() {
+      _phase = _RecoverPhase.busy;
+      _error = null;
+    });
+    final approved = await GetIt.I<BiometricService>().authorize(
+      'Recover USDC from ${_short(widget.agent.pubkey)} to your wallet',
+    );
+    if (!mounted) return;
+    if (!approved) {
+      setState(() {
+        _phase = _RecoverPhase.ready;
+        _error = 'Biometric cancelled. Tap again to retry.';
+      });
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    try {
+      final wallet = await GetIt.I<WalletRepository>().cachedConnection();
+      if (wallet == null) {
+        throw WalletException(
+          'Wallet session lost. Reconnect from onboarding.',
+          kind: WalletExceptionKind.userCancelled,
+        );
+      }
+      await GetIt.I<VaultActionService>().withdraw(
+        ownerPubkeyBase58: wallet.pubkeyBase58,
+        agentPubkeyBase58: widget.agent.pubkey,
+        walletAuthToken: wallet.authToken,
+        amountMicroUsdc: _balanceMicro,
+      );
+      if (!mounted) return;
+      setState(() => _phase = _RecoverPhase.done);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on WalletException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _phase = _RecoverPhase.ready;
+        _error = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _phase = _RecoverPhase.ready;
+        _error = 'Recovery failed: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mono = Theme.of(context).extension<AFTypography>()!.mono;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Recover funds',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AFColors.fg,
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.44,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          "This device can't sign for ${_short(widget.agent.pubkey)}. You can still pull the vault's USDC back into your wallet — only the agent's signing keys are gone, not the funds.",
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AFColors.muted,
+            fontSize: 14,
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: 22),
+        if (_phase == _RecoverPhase.loading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 28),
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AFColors.mint,
+                ),
+              ),
+            ),
+          )
+        else if (_phase == _RecoverPhase.empty)
+          _RecoverEmpty(mono: mono)
+        else if (_phase == _RecoverPhase.done)
+          const _RecoverDone()
+        else
+          _RecoverDetails(
+            agent: widget.agent,
+            balanceMicro: _balanceMicro,
+            mono: mono,
+            busy: _phase == _RecoverPhase.busy,
+          ),
+        if (_error != null) ...[
+          const SizedBox(height: 14),
+          Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AFColors.danger, fontSize: 13),
+          ),
+        ],
+        const SizedBox(height: 22),
+        if (_phase == _RecoverPhase.ready)
+          _MintButton(
+            label: _phase == _RecoverPhase.busy
+                ? 'Authorizing…'
+                : 'Recover \$${_fmtUsd(_balanceMicro / 1000000)}',
+            icon: Icons.fingerprint,
+            onPressed: _balanceMicro > 0 ? _recover : null,
+          ),
+        if (_phase == _RecoverPhase.busy)
+          const _MintButton(label: 'Authorizing…', onPressed: null),
+        if (_phase != _RecoverPhase.done) ...[
+          const SizedBox(height: 10),
+          _GhostButton(
+            label: _phase == _RecoverPhase.empty ? 'Close' : 'Cancel',
+            onPressed: _phase == _RecoverPhase.busy
+                ? null
+                : () => Navigator.of(context).pop(false),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _RecoverDetails extends StatelessWidget {
+  const _RecoverDetails({
+    required this.agent,
+    required this.balanceMicro,
+    required this.mono,
+    required this.busy,
+  });
+  final Agent agent;
+  final int balanceMicro;
+  final TextTheme mono;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          '\$${_fmtUsd(balanceMicro / 1000000)}',
+          textAlign: TextAlign.center,
+          style: mono.displayMedium?.copyWith(
+            color: AFColors.mint,
+            fontSize: 52,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -1.82,
+            height: 1,
+            shadows: const [
+              Shadow(color: AFColors.mintGlow, blurRadius: 28),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'in vault',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AFColors.muted, fontSize: 13),
+        ),
+        const SizedBox(height: 18),
+        _Row(k: 'Agent', v: _short(agent.pubkey), mono: mono),
+        _Row(k: 'Destination', v: 'Your wallet', mono: mono, last: true),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0x1AE08577),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0x4DE08577)),
+          ),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  color: AFColors.danger, size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'The agent stops working after this. Its reputation stays on chain but the vault drains to zero. Create a new agent to keep going.',
+                  style: TextStyle(
+                    color: AFColors.fg2,
+                    fontSize: 12.5,
+                    height: 1.45,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (busy) ...[
+          const SizedBox(height: 18),
+          const Icon(Icons.fingerprint, color: AFColors.mint, size: 56),
+          const SizedBox(height: 8),
+          const Text(
+            'Scanning…',
+            style: TextStyle(color: AFColors.muted, fontSize: 14),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _RecoverEmpty extends StatelessWidget {
+  const _RecoverEmpty({required this.mono});
+  final TextTheme mono;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AFColors.surface2,
+              shape: BoxShape.circle,
+              border: Border.all(color: AFColors.line),
+            ),
+            child: const Icon(
+              Icons.inbox_outlined,
+              color: AFColors.muted,
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '\$0.00 in vault',
+            style: mono.bodyLarge?.copyWith(
+              color: AFColors.fg,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Nothing to recover. You can safely create a new agent.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AFColors.muted, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecoverDone extends StatelessWidget {
+  const _RecoverDone();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      child: Column(
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: const BoxDecoration(
+              color: AFColors.mintTint,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check, color: AFColors.mint, size: 40),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Recovered',
+            style: TextStyle(
+              color: AFColors.fg,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _fmtUsd(double usd) {
+  if (usd == 0) return '0.00';
+  if (usd >= 1000000) return '${(usd / 1000000).toStringAsFixed(2)}M';
+  if (usd >= 1000) return '${(usd / 1000).toStringAsFixed(2)}K';
+  return usd.toStringAsFixed(2);
 }
 
 // ============================================================================

@@ -9,6 +9,7 @@ import '../../../../core/config/env.dart';
 const _initializeAgentDiscriminator = <int>[212, 81, 156, 211, 212, 110, 21, 28];
 const _createVaultDiscriminator = <int>[29, 237, 247, 208, 193, 82, 54, 135];
 const _depositDiscriminator = <int>[242, 35, 198, 137, 82, 225, 242, 182];
+const _withdrawDiscriminator = <int>[183, 18, 70, 156, 148, 109, 161, 34];
 const _freezeVaultDiscriminator = <int>[144, 211, 63, 236, 97, 31, 170, 175];
 const _unfreezeVaultDiscriminator = <int>[145, 244, 206, 234, 251, 250, 116, 183];
 
@@ -152,6 +153,26 @@ Instruction depositIx({
   );
 }
 
+Instruction withdrawIx({
+  required OnchainAccounts accounts,
+  required int amountUsdc,
+}) {
+  final data = BytesBuilder()
+    ..add(_withdrawDiscriminator)
+    ..add(_u64Le(amountUsdc));
+  return Instruction(
+    programId: Ed25519HDPublicKey.fromBase58(AppEnv.creditVaultProgramId),
+    accounts: [
+      AccountMeta.writeable(pubKey: accounts.owner, isSigner: true),
+      AccountMeta.writeable(pubKey: accounts.vault, isSigner: false),
+      AccountMeta.writeable(pubKey: accounts.vaultAta, isSigner: false),
+      AccountMeta.writeable(pubKey: accounts.ownerAta, isSigner: false),
+      AccountMeta.readonly(pubKey: TokenProgram.id, isSigner: false),
+    ],
+    data: ByteArray(data.toBytes()),
+  );
+}
+
 Instruction freezeVaultIx({required OnchainAccounts accounts}) {
   return Instruction(
     programId: Ed25519HDPublicKey.fromBase58(AppEnv.creditVaultProgramId),
@@ -171,6 +192,46 @@ Instruction unfreezeVaultIx({required OnchainAccounts accounts}) {
       AccountMeta.writeable(pubKey: accounts.vault, isSigner: false),
     ],
     data: ByteArray(_unfreezeVaultDiscriminator),
+  );
+}
+
+// sha256("global:approve_spend")[..8]
+const _approveSpendDiscriminator = <int>[248, 201, 151, 15, 28, 162, 112, 90];
+// sha256("global:cancel_spend")[..8]
+const _cancelSpendDiscriminator = <int>[122, 254, 101, 132, 241, 232, 205, 179];
+
+Instruction approveSpendIx({
+  required OnchainAccounts accounts,
+  required Ed25519HDPublicKey pendingSpend,
+  required Ed25519HDPublicKey serviceTokenAccount,
+}) {
+  return Instruction(
+    programId: Ed25519HDPublicKey.fromBase58(AppEnv.creditVaultProgramId),
+    accounts: [
+      AccountMeta.writeable(pubKey: accounts.owner, isSigner: true),
+      AccountMeta.writeable(pubKey: accounts.vault, isSigner: false),
+      AccountMeta.writeable(pubKey: accounts.policy, isSigner: false),
+      AccountMeta.writeable(pubKey: pendingSpend, isSigner: false),
+      AccountMeta.writeable(pubKey: accounts.vaultAta, isSigner: false),
+      AccountMeta.writeable(pubKey: serviceTokenAccount, isSigner: false),
+      AccountMeta.readonly(pubKey: TokenProgram.id, isSigner: false),
+    ],
+    data: ByteArray(_approveSpendDiscriminator),
+  );
+}
+
+Instruction cancelSpendIx({
+  required OnchainAccounts accounts,
+  required Ed25519HDPublicKey pendingSpend,
+}) {
+  return Instruction(
+    programId: Ed25519HDPublicKey.fromBase58(AppEnv.creditVaultProgramId),
+    accounts: [
+      AccountMeta.writeable(pubKey: accounts.owner, isSigner: true),
+      AccountMeta.readonly(pubKey: accounts.vault, isSigner: false),
+      AccountMeta.writeable(pubKey: pendingSpend, isSigner: false),
+    ],
+    data: ByteArray(_cancelSpendDiscriminator),
   );
 }
 

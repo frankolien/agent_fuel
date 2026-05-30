@@ -19,6 +19,16 @@ class SuccessStep extends StatelessWidget {
         label: 'Enter Fleet',
         onPressed: () => context.router.replaceAll([const FleetRoute()]),
       ),
+      secondaryCta: OnboardingCta(
+        label: 'Add another agent',
+        icon: Icons.add,
+        onPressed: () {
+          OnboardingBloc.addAgentMode = true;
+          // Replace so the back stack stays at Fleet → Onboarding, not
+          // Fleet → Onboarding → Onboarding.
+          context.router.replace(const OnboardingRoute());
+        },
+      ),
       child: const _SuccessBody(),
     );
   }

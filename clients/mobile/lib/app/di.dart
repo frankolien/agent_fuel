@@ -5,6 +5,10 @@ import '../features/auth/data/datasources/biometric_service.dart';
 import '../features/auth/data/datasources/jwt_store.dart';
 import '../features/auth/data/repositories/auth_repository.dart';
 import '../features/auth/domain/usecases/sign_in_with_solana.dart';
+import '../features/agent_keys/data/datasources/agent_key_store.dart';
+import '../features/agent_keys/data/datasources/agent_seed_derivation.dart';
+import '../features/agent_keys/data/datasources/agent_seed_recovery_sweeper.dart';
+import '../features/alerts/data/repositories/alerts_repository.dart';
 import '../features/fleet/data/onchain/vault_action_service.dart';
 import '../features/fleet/data/repositories/fleet_repository.dart';
 import '../features/fleet/presentation/bloc/fleet_bloc.dart';
@@ -32,9 +36,14 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<FleetRepository>(
     () => FleetRepository(sl<DioClient>().dio),
   );
-  sl.registerFactory<FleetBloc>(() => FleetBloc(sl<FleetRepository>()));
+  sl.registerFactory<FleetBloc>(
+    () => FleetBloc(sl<FleetRepository>(), sl<AgentSeedRecoverySweeper>()),
+  );
   sl.registerLazySingleton<VaultActionService>(
     () => VaultActionService(sl<MwaDataSource>()),
+  );
+  sl.registerLazySingleton<AlertsRepository>(
+    () => AlertsRepository(sl<DioClient>().dio),
   );
 
   sl.registerLazySingleton<AuthTokenStore>(AuthTokenStore.new);
@@ -42,6 +51,17 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<WalletBalanceService>(WalletBalanceService.new);
   sl.registerLazySingleton<AgentProvisioningService>(
     AgentProvisioningService.new,
+  );
+  sl.registerLazySingleton<AgentKeyStore>(AgentKeyStore.new);
+  sl.registerLazySingleton<AgentSeedDerivation>(
+    () => AgentSeedDerivation(sl<WalletRepository>()),
+  );
+  sl.registerLazySingleton<AgentSeedRecoverySweeper>(
+    () => AgentSeedRecoverySweeper(
+      sl<WalletRepository>(),
+      sl<AgentKeyStore>(),
+      sl<AgentSeedDerivation>(),
+    ),
   );
   sl.registerLazySingleton<WalletRepository>(
     () => WalletRepository(sl<MwaDataSource>(), sl<AuthTokenStore>()),
@@ -60,6 +80,8 @@ Future<void> configureDependencies() async {
       sl<BiometricService>(),
       sl<MwaDataSource>(),
       sl<AgentProvisioningService>(),
+      sl<AgentKeyStore>(),
+      sl<AgentSeedDerivation>(),
     ),
   );
 }

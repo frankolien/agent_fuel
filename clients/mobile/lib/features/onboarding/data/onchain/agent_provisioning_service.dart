@@ -8,14 +8,21 @@ import 'package:solana/solana.dart';
 import '../../../../core/config/env.dart';
 import 'agent_instructions.dart';
 
+const int kAgentEd25519SeedBytes = 32;
+
 class AgentProvisioningPlan {
   AgentProvisioningPlan({
     required this.transactionBytes,
     required this.agentPubkey,
+    required this.agentSeedBytes,
   });
 
   final Uint8List transactionBytes;
   final String agentPubkey;
+  /// 32-byte ed25519 seed. Only persisted by the caller after the on-chain
+  /// tx confirms — if the tx fails, the keypair is dropped and a fresh one
+  /// is generated for the retry.
+  final Uint8List agentSeedBytes;
 }
 
 class AgentProvisioningService {
@@ -32,9 +39,19 @@ class AgentProvisioningService {
     required double hourlyLimitUsdc,
     required double lifetimeLimitUsdc,
     required bool allowPostPay,
+    Uint8List? agentSeedBytes,
   }) async {
     final owner = Ed25519HDPublicKey.fromBase58(ownerPubkeyBase58);
-    final agentKeypair = await Ed25519HDKeyPair.random();
+    // Caller supplies a deterministic seed (wallet-derived) when available;
+    // a random seed is the fallback for tests and any caller that hasn't
+    // wired derivation yet.
+    final seedBytes = agentSeedBytes ?? _randomSeed();
+    assert(
+      seedBytes.length == kAgentEd25519SeedBytes,
+      'ed25519 seed must be 32 bytes',
+    );
+    final agentKeypair =
+        await Ed25519HDKeyPair.fromPrivateKeyBytes(privateKey: seedBytes);
     final agentPubkey = agentKeypair.publicKey;
     final accounts =
         await deriveOnchainAccounts(owner: owner, agent: agentPubkey);
@@ -97,11 +114,19 @@ class AgentProvisioningService {
     return AgentProvisioningPlan(
       transactionBytes: Uint8List.fromList(signedTx.toByteArray().toList()),
       agentPubkey: agentPubkey.toBase58(),
+      agentSeedBytes: seedBytes,
     );
   }
 
   int _randomU63() {
     final r = Random.secure();
     return (r.nextInt(1 << 31) << 31) | r.nextInt(1 << 31);
+  }
+
+  Uint8List _randomSeed() {
+    final r = Random.secure();
+    return Uint8List.fromList(
+      List<int>.generate(kAgentEd25519SeedBytes, (_) => r.nextInt(256)),
+    );
   }
 }

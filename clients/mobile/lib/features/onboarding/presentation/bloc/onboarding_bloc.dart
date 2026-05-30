@@ -1,6 +1,8 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/error/exceptions.dart';
+import '../../../agent_keys/data/datasources/agent_key_store.dart';
+import '../../../agent_keys/data/datasources/agent_seed_derivation.dart';
 import '../../../auth/data/datasources/biometric_service.dart';
 import '../../../auth/domain/usecases/sign_in_with_solana.dart';
 import '../../../fleet/data/repositories/fleet_repository.dart';
@@ -22,7 +24,14 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     this._biometric,
     this._mwa,
     this._provisioning,
+    this._agentKeys,
+    this._derivation,
   ) : super(const OnboardingWelcome(flow: OnboardingFlow())) {
+    // Consume — and reset — the global add-mode flag so a stale add-agent
+    // entry from a previous wizard run can't suppress the bounce on a
+    // genuine restart.
+    _addAgentMode = addAgentMode;
+    addAgentMode = false;
     on<OnboardingStarted>(_onStarted);
     on<OnboardingNext>(_onNext);
     on<OnboardingBack>(_onBack);
@@ -45,17 +54,34 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
   final BiometricService _biometric;
   final MwaDataSource _mwa;
   final AgentProvisioningService _provisioning;
+  final AgentKeyStore _agentKeys;
+  final AgentSeedDerivation _derivation;
+
+  /// One-shot signal from the Fleet "+ Add agent" entry point — tells the
+  /// next bloc instance to run the wizard as an "add agent" flow instead of
+  /// bouncing back to Fleet on existing-agent detection. Constructor reads
+  /// and clears it so a stale value can't leak across app restarts.
+  static bool addAgentMode = false;
+  late final bool _addAgentMode;
 
   Future<void> _onStarted(
     OnboardingStarted _,
     Emitter<OnboardingState> emit,
   ) async {
     final cached = await _wallet.cachedConnection();
-    if (cached != null) {
-      emit(OnboardingWelcome(
+    if (cached == null) return;
+    // Add-agent shortcut: skip Welcome + Wallet entirely. The user
+    // already has a session; they came here to fill the agent details.
+    if (_addAgentMode) {
+      emit(OnboardingIdentity(
         flow: state.flow.copyWith(ownerPubkey: cached.pubkeyBase58),
+        authToken: cached.authToken,
       ));
+      return;
     }
+    emit(OnboardingWelcome(
+      flow: state.flow.copyWith(ownerPubkey: cached.pubkeyBase58),
+    ));
   }
 
   void _onNext(OnboardingNext _, Emitter<OnboardingState> emit) {
@@ -134,6 +160,22 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     emit(OnboardingWallet(flow: cur.flow, busy: true, authToken: cur.authToken));
 
     try {
+      // Add-agent shortcut: the user is already signed in (they were on
+      // Fleet, which holds a valid JWT and a cached MWA session). Skip both
+      // the MWA `connect()` prompt and the SIWS re-sign — just reuse the
+      // cached wallet and walk straight into Identity.
+      if (_addAgentMode) {
+        final cached = await _wallet.cachedConnection();
+        if (cached != null) {
+          emit(OnboardingIdentity(
+            flow: cur.flow.copyWith(ownerPubkey: cached.pubkeyBase58),
+            authToken: cached.authToken,
+          ));
+          return;
+        }
+        // No cached session — fall through to the normal connect+SIWS path.
+      }
+
       // Reuse this session's MWA authorization if we already have it — a
       // retry after a failed sign-message shouldn't re-prompt connect.
       final ConnectedWallet wallet = (cur.authToken != null && cur.flow.ownerPubkey != null)
@@ -258,6 +300,16 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     }
 
     try {
+      // Pick the next wallet-scoped agent index from on-chain truth so two
+      // devices don't collide on the same derived seed. We can't rely on
+      // any local counter — the user might be onboarding a second agent
+      // from a fresh install with N agents already deployed.
+      final nextIndex = await _nextAgentIndex(owner);
+      final seedBytes = await _derivation.seedForIndex(
+        ownerPubkey: owner,
+        walletAuthToken: authToken,
+        index: nextIndex,
+      );
       final plan = await _provisioning.build(
         ownerPubkeyBase58: owner,
         agentHandle: cur.flow.handle,
@@ -266,11 +318,29 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
         hourlyLimitUsdc: cur.flow.effectiveMaxPerHourUsdc,
         lifetimeLimitUsdc: 0.0,
         allowPostPay: false,
+        agentSeedBytes: seedBytes,
       );
       await _mwa.signAndSendTransaction(
         authToken: authToken,
         transactionBytes: plan.transactionBytes,
       );
+      // Tx confirmed — the agent now exists on chain. Persist its keypair
+      // so future spend / request_spend calls (by an agent runtime or by
+      // this app) can sign with it. Failures here don't bubble up: the
+      // agent is already provisioned, and the user can re-export from the
+      // detail page as long as they haven't cleared app storage.
+      try {
+        await _agentKeys.save(
+          agentPubkey: plan.agentPubkey,
+          seedBytes: plan.agentSeedBytes,
+        );
+      } catch (e) {
+        // Best effort. If this fails the agent is still on chain and
+        // functional — only the recovery path is broken.
+        // (No way to surface this without delaying success; logged only.)
+        // ignore: avoid_print
+        print('agent key persist failed: $e');
+      }
       emit(OnboardingSuccess(flow: cur.flow));
     } on WalletException catch (e) {
       emit(OnboardingGuardrails(
@@ -295,6 +365,19 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
       // If the backend can't be reached we'd rather keep the wizard than
       // strand the user — Fleet would just bounce them back anyway.
       return false;
+    }
+  }
+
+  Future<int> _nextAgentIndex(String ownerPubkey) async {
+    try {
+      final agents = await _fleet.listAgents(ownerPubkey: ownerPubkey);
+      return agents.length;
+    } catch (_) {
+      // Backend unreachable — fall back to index 0. On a fresh device this
+      // is right; on a device with existing agents it produces a collision
+      // that the on-chain InitializeAgent will reject, and the user
+      // retries. Better than blocking onboarding on a backend hiccup.
+      return 0;
     }
   }
 }
