@@ -40,7 +40,13 @@ pub async fn helius(
             }
             score::record_events(&state.pool, &state.score_cache, &events).await;
             state.ws_hub.broadcast_events(&events);
-            alerts::dispatch(&state.pool, state.notifier.as_ref(), &events).await;
+            alerts::dispatch(
+                &state.pool,
+                state.notifier.as_ref(),
+                &state.ws_hub,
+                &events,
+            )
+            .await;
             tracing::info!(
                 parsed = events.len(),
                 bytes = body.len(),

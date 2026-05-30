@@ -125,6 +125,10 @@ pub fn service_key(pubkey: &str) -> String {
     format!("service:{pubkey}")
 }
 
+pub fn alerts_key(owner: &str) -> String {
+    format!("alerts:{owner}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -230,5 +234,6 @@ mod tests {
         assert_eq!(agent_key("abc"), "agent:abc");
         assert_eq!(vault_key("abc"), "vault:abc");
         assert_eq!(service_key("abc"), "service:abc");
+        assert_eq!(alerts_key("abc"), "alerts:abc");
     }
 }

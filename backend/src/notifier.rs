@@ -8,6 +8,7 @@ use serde::Serialize;
 pub struct Alert {
     pub owner: String,
     pub kind: AlertKind,
+    pub severity: AlertSeverity,
     pub title: String,
     pub body: String,
     pub data: serde_json::Value,
@@ -18,6 +19,39 @@ pub struct Alert {
 pub enum AlertKind {
     BudgetThreshold,
     ScoreChange,
+    TierCrossed,
+    VaultFunded,
+    VaultFrozen,
+    ApprovalRequired,
+}
+
+impl AlertKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AlertKind::BudgetThreshold => "budget_threshold",
+            AlertKind::ScoreChange => "score_change",
+            AlertKind::TierCrossed => "tier_crossed",
+            AlertKind::VaultFunded => "vault_funded",
+            AlertKind::VaultFrozen => "vault_frozen",
+            AlertKind::ApprovalRequired => "approval_required",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AlertSeverity {
+    Urgent,
+    Info,
+}
+
+impl AlertSeverity {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AlertSeverity::Urgent => "urgent",
+            AlertSeverity::Info => "info",
+        }
+    }
 }
 
 #[async_trait]

@@ -3,8 +3,9 @@ use std::time::Duration;
 use actix_web::{get, web, HttpRequest, HttpResponse};
 use futures_util::StreamExt;
 
+use crate::routes::auth::AuthedPubkey;
 use crate::state::AppState;
-use crate::ws_hub::{agent_key, service_key, vault_key};
+use crate::ws_hub::{agent_key, alerts_key, service_key, vault_key};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 const CLIENT_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
@@ -40,6 +41,24 @@ pub async fn service_stream(
 ) -> Result<HttpResponse, actix_web::Error> {
     let key = service_key(&path.into_inner());
     serve_stream(req, body, &state, key).await
+}
+
+/// Owner-scoped alert stream. The owner pubkey in the path must match the
+/// authenticated caller — we don't surface a "subscribe to anyone's alerts"
+/// endpoint. Returns 403 if the JWT identifies a different wallet.
+#[get("/ws/alerts/{owner}")]
+pub async fn alerts_stream(
+    req: HttpRequest,
+    body: web::Payload,
+    state: web::Data<AppState>,
+    caller: AuthedPubkey,
+    path: web::Path<String>,
+) -> Result<HttpResponse, actix_web::Error> {
+    let owner = path.into_inner();
+    if owner != caller.0 {
+        return Ok(HttpResponse::Forbidden().finish());
+    }
+    serve_stream(req, body, &state, alerts_key(&owner)).await
 }
 
 async fn serve_stream(

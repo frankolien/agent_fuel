@@ -72,6 +72,8 @@ pub fn decode(raw: &[u8]) -> Result<Option<DecodedEvent>, DecodeError> {
         vault::VaultUnfrozen,
         vault::PolicyUpdated,
         vault::Withdrawn,
+        vault::SpendRequested,
+        vault::SpendRejected,
     );
 
     Ok(None)
@@ -117,6 +119,8 @@ mod tests {
             vault::VaultUnfrozen::discriminator(),
             vault::PolicyUpdated::discriminator(),
             vault::Withdrawn::discriminator(),
+            vault::SpendRequested::discriminator(),
+            vault::SpendRejected::discriminator(),
         ];
         let mut set = std::collections::HashSet::new();
         for d in names {

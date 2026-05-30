@@ -93,3 +93,25 @@ pub struct Withdrawn {
     pub slot: u64,
 }
 __anchor_event_disc_impl!(Withdrawn, "Withdrawn");
+
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize)]
+pub struct SpendRequested {
+    pub vault: PubkeyBytes,
+    pub agent: PubkeyBytes,
+    pub service: PubkeyBytes,
+    pub pending_spend: PubkeyBytes,
+    pub amount_usdc: u64,
+    pub nonce: u64,
+    pub slot: u64,
+}
+__anchor_event_disc_impl!(SpendRequested, "SpendRequested");
+
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize)]
+pub struct SpendRejected {
+    pub vault: PubkeyBytes,
+    pub owner: PubkeyBytes,
+    pub pending_spend: PubkeyBytes,
+    pub nonce: u64,
+    pub slot: u64,
+}
+__anchor_event_disc_impl!(SpendRejected, "SpendRejected");
