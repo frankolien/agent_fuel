@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/error/exceptions.dart';
@@ -11,10 +13,16 @@ import '../../domain/entities/agent.dart';
 import 'fleet_event.dart';
 import 'fleet_state.dart';
 
+void _log(String msg) {
+  if (!kDebugMode) return;
+  developer.log(msg, name: 'af.fleet');
+}
+
 class FleetBloc extends Bloc<FleetEvent, FleetState> {
   FleetBloc(this._repository, this._sweeper) : super(const FleetInitial()) {
     _ws = AgentFuelWsService(onChange: () {
       if (isClosed) return;
+      _log('WS frame → trigger re-fetch (owner=$_lastOwnerPubkey)');
       add(const FleetLiveUpdateReceived());
     });
     on<FleetLoadRequested>(_onLoad);
@@ -51,6 +59,8 @@ class FleetBloc extends Bloc<FleetEvent, FleetState> {
         emit(FleetEmpty(ownerPubkey: event.ownerPubkey));
         return;
       }
+      _log('fetched ${agents.length} agents: '
+          '${agents.map((a) => "${a.pubkey.substring(0, 4)}…(vol=${a.totalVolumeUsdc} tx=${a.totalTransactions} score=${a.score})").join(", ")}');
       final tvl = agents.fold<int>(0, (s, a) => s + a.totalVolumeUsdc);
       _history.add(TvlSnapshot(DateTime.now(), tvl));
       if (_history.length > _maxHistory) {
@@ -67,6 +77,7 @@ class FleetBloc extends Bloc<FleetEvent, FleetState> {
       final firstPubkey = agents.first.pubkey;
       if (_watchedAgentPubkey != firstPubkey) {
         _watchedAgentPubkey = firstPubkey;
+        _log('watching WS agent=${firstPubkey.substring(0, 4)}…');
         _ws.watch(ApiEndpoint.wsAgent(firstPubkey));
       }
       // Best-effort: silently recover any locally-missing seeds from the

@@ -1,7 +1,14 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/activity_event.dart';
 import '../../domain/entities/agent.dart';
+
+void _log(String msg) {
+  if (!kDebugMode) return;
+  developer.log(msg, name: 'af.activity');
+}
 
 /// In-memory feed of synthesized activity events derived from FleetBloc state.
 ///
@@ -33,6 +40,7 @@ class ActivityFeed extends ChangeNotifier {
         _lastFrozen[a.pubkey] = !a.isScored;
       }
       _pushSeedEvents(agents);
+      _log('seeded ${agents.length} agents');
       notifyListeners();
       return;
     }
@@ -44,6 +52,7 @@ class ActivityFeed extends ChangeNotifier {
       final prevVol = _lastVolume[pubkey] ?? a.totalVolumeUsdc;
       final volDiff = a.totalVolumeUsdc - prevVol;
       if (volDiff > 0) {
+        _log('SPEND ${pubkey.substring(0, 4)}… +$volDiff μ ($prevVol→${a.totalVolumeUsdc})');
         _push(ActivityEvent(
           id: _nextId(),
           kind: ActivityKind.spend,
@@ -52,6 +61,8 @@ class ActivityFeed extends ChangeNotifier {
           amountUsdcMicro: volDiff,
         ));
         changed = true;
+      } else if (prevVol != a.totalVolumeUsdc) {
+        _log('volume changed but not positive: ${pubkey.substring(0, 4)}… $prevVol→${a.totalVolumeUsdc}');
       }
       _lastVolume[pubkey] = a.totalVolumeUsdc;
 

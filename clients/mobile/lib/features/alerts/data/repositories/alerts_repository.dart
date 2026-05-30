@@ -7,12 +7,14 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/network/agent_fuel_ws_service.dart';
 import '../../../../core/network/api_endpoint.dart';
+import '../../../auth/data/datasources/jwt_store.dart';
 import '../../domain/entities/alert.dart';
 
 class AlertsRepository extends ChangeNotifier {
-  AlertsRepository(this._dio);
+  AlertsRepository(this._dio, this._jwtStore);
 
   final Dio _dio;
+  final JwtStore _jwtStore;
   AgentFuelWsService? _ws;
 
   List<Alert> _alerts = const [];
@@ -57,15 +59,27 @@ class AlertsRepository extends ChangeNotifier {
   /// Subscribes to `/ws/alerts/{owner}`. Pushed frames are JSON-encoded Alert
   /// payloads — we merge them into the head of the list and notify listeners
   /// without round-tripping HTTP.
-  void watch(String ownerPubkey) {
+  ///
+  /// The backend gates this channel on a SIWS JWT (owner pubkey in the path
+  /// must match the token's `sub`), so we attach the cached Bearer header on
+  /// the WS upgrade. Falls back to a header-less connect if no token is
+  /// cached — the backend will 401 and the user will land on onboarding.
+  Future<void> watch(String ownerPubkey) async {
     if (_ownerWatched == ownerPubkey && _ws != null) return;
     _ownerWatched = ownerPubkey;
-    _ws?.dispose();
+    await _ws?.dispose();
+    final cached = await _jwtStore.read();
+    final headers = cached == null
+        ? null
+        : {'Authorization': 'Bearer ${cached.token}'};
     _ws = AgentFuelWsService(
       onChange: () {},
       onMessage: _ingest,
     );
-    _ws!.watch(ApiEndpoint.wsAlerts(ownerPubkey));
+    await _ws!.watch(
+      ApiEndpoint.wsAlerts(ownerPubkey),
+      headers: headers,
+    );
   }
 
   Future<void> stop() async {

@@ -46,7 +46,7 @@ Future<void> configureDependencies() async {
     () => VaultActionService(sl<MwaDataSource>(), sl<TxPreflight>()),
   );
   sl.registerLazySingleton<AlertsRepository>(
-    () => AlertsRepository(sl<DioClient>().dio),
+    () => AlertsRepository(sl<DioClient>().dio, sl<JwtStore>()),
   );
 
   sl.registerLazySingleton<AuthTokenStore>(AuthTokenStore.new);
