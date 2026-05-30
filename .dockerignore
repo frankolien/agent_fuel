@@ -7,6 +7,9 @@ target/
 
 # Frontend / SDK — backend image doesn't ship them.
 clients/
+# …except clients/runtime: a workspace member, so cargo must parse its
+# manifest even though `-p agent_fuel_backend` won't actually compile it.
+!clients/runtime/
 
 # Editor / OS noise.
 .vscode/

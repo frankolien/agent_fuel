@@ -16,6 +16,9 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY backend backend
 COPY programs programs
+# Workspace member; cargo refuses to parse the manifest without it, even
+# though `-p agent_fuel_backend` won't actually compile this crate.
+COPY clients/runtime clients/runtime
 
 # Build only the backend binary. Solana programs in the workspace are not
 # pulled in because they aren't deps of the backend crate.
