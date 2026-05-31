@@ -1,24 +1,30 @@
-// Agent Fuel dogfood — minimal "trading bot" that polls Pyth BTC/USD
-// every N seconds and pays a tiny per-tick fee to a service it's
-// pretending to subscribe to. Run it for a day or a week; watch the
-// vault balance tick down, the score climb, the alerts fire on the
-// mobile app.
+// Agent Fuel dogfood — "trading bot" that polls Pyth BTC/USD every N
+// seconds and pays a tiny per-tick fee to one of N registered services,
+// round-robin. Run it for a day or a week; watch the vault balance tick
+// down, the score + diversity climb, the alerts fire on the mobile app.
 //
 //   cargo run -p agent_fuel_runtime --example pyth_logger -- \
 //     --agent-key   ~/.config/solana/agent.json \
 //     --owner       <OWNER_WALLET_B58> \
-//     --service-key ~/.config/solana/svc-pyth.json
+//     --service-key ~/.config/solana/svc-pyth.json \
+//     --service-key ~/.config/solana/svc-jupiter.json \
+//     --service-key ~/.config/solana/svc-helius.json \
+//     --interval-secs 5
 //
-// The service keypair must already be registered on chain (run
-// `cargo run -p agent_fuel_runtime -- register-service` once first).
+// Pass --service-key once per registered service. The bot rotates across
+// them in argument order, so 3 services × 5s interval = 36 events/min and
+// the activity feed actually looks busy. Each service must already be
+// registered on chain (run `register-service` once per keypair) AND have
+// a USDC ATA + ~0.05 SOL for the record_payment receipt PDA rent.
+//
 // Each tick atomically does credit_vault::spend + reputation::record_payment
-// so the agent's volume + score actually accrue — without record_payment the
-// backend mirror has nothing to count.
+// so the agent's volume + score accrue — without record_payment the backend
+// mirror has nothing to count.
 //
 // Default cadence is 60s × $0.01 per tick = ~$15/day. Tune with
 // --interval-secs and --amount-per-tick to match how much rope you want
 // before the vault dries up. A $100 deposit holds about 7 days at the
-// defaults.
+// defaults; with 3 services × 5s × $0.005 = ~$30/day.
 
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -53,11 +59,12 @@ struct Args {
     #[arg(long, env = "AF_OWNER")]
     owner: String,
 
-    /// Path to the service keypair (the one registered via
-    /// `register-service`). Required because the reputation half of each
-    /// tick is signed by the service, not the agent.
-    #[arg(long, env = "AF_SERVICE_KEY")]
-    service_key: PathBuf,
+    /// Path to a service keypair (registered via `register-service`).
+    /// Pass once per service to rotate across N services round-robin —
+    /// each tick uses the next one. Required because the reputation half
+    /// of each tick is signed by the service, not the agent.
+    #[arg(long = "service-key", env = "AF_SERVICE_KEY", required = true, num_args = 1..)]
+    service_keys: Vec<PathBuf>,
 
     #[arg(long, default_value_t = 60)]
     interval_secs: u64,
@@ -115,14 +122,21 @@ fn main() -> Result<()> {
         ));
     }
 
-    let service_keypair = load_keypair(&args.service_key)?;
-    let service_pk = service_keypair.pubkey();
+    let service_keypairs: Vec<_> = args
+        .service_keys
+        .iter()
+        .map(|path| {
+            load_keypair(path)
+                .with_context(|| format!("loading service key {}", path.display()))
+        })
+        .collect::<Result<_>>()?;
+    let service_pubkeys: Vec<String> =
+        service_keypairs.iter().map(|kp| kp.pubkey().to_string()).collect();
 
     let spender = Spender {
         agent: load_keypair(&args.agent_key)?,
         owner: Pubkey::from_str(&args.owner)
             .with_context(|| format!("invalid --owner: {}", args.owner))?,
-        service: service_pk,
         usdc_mint: Pubkey::from_str(&args.usdc_mint)
             .with_context(|| format!("invalid --usdc-mint: {}", args.usdc_mint))?,
         program: Pubkey::from_str(&args.credit_vault_program).with_context(|| {
@@ -139,7 +153,7 @@ fn main() -> Result<()> {
 
     tracing::info!(
         agent = %spender.agent.pubkey_for_log(),
-        service = %service_pk,
+        services = ?service_pubkeys,
         interval_secs = args.interval_secs,
         amount_per_tick = args.amount_per_tick,
         "starting pyth logger — Ctrl-C to stop"
@@ -150,20 +164,28 @@ fn main() -> Result<()> {
     let url = format!("{HERMES_BASE}?ids[]={BTC_USD_FEED}");
     loop {
         tick_counter = tick_counter.wrapping_add(1);
+        // Round-robin by tick index — same service hits every Nth tick
+        // where N = service count. Index wraps at u64::MAX (~584 billion
+        // years at 60s ticks).
+        let idx = ((tick_counter - 1) as usize) % service_keypairs.len();
+        let service_kp = &service_keypairs[idx];
+        let service_pk_str = &service_pubkeys[idx];
+
         match fetch_btc_usd(&url) {
             Ok(price) => {
                 let receipt = build_receipt(
                     &spender.agent.pubkey_for_log(),
-                    &service_pk.to_string(),
+                    service_pk_str,
                     tick_counter,
                     price,
                 );
-                match spender.pay(amount_micro, &service_keypair, receipt) {
+                match spender.pay(amount_micro, service_kp, receipt) {
                     Ok(sig) => {
                         consecutive_errors = 0;
                         tracing::info!(
                             btc_usd = %format!("{price:.2}"),
                             spent_usdc = args.amount_per_tick,
+                            service = %service_pk_str,
                             signature = %sig,
                             "tick"
                         );
@@ -172,8 +194,9 @@ fn main() -> Result<()> {
                         consecutive_errors += 1;
                         tracing::error!(
                             error = %err,
+                            service = %service_pk_str,
                             consecutive_errors,
-                            "pay failed (vault empty? service not registered? policy violation?)"
+                            "pay failed (vault empty? service unregistered? service out of SOL? policy violation?)"
                         );
                     }
                 }

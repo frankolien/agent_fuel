@@ -255,18 +255,15 @@ pub fn expand_tilde(path: &PathBuf) -> PathBuf {
 }
 
 /// High-level convenience for "agent pays a service" flows. Embeds the agent
-/// keypair, target service, mint, program IDs, and an RPC client; exposes
-/// `spend(amount_micro)` for raw vault drains, and `pay(amount, service_kp)`
-/// which atomically does spend + reputation record_payment in a single tx so
-/// the agent's volume / score actually accrues. Reputation requires a
-/// service signer because services attest to having received payment — the
-/// agent can't fake its own rep.
+/// keypair, mint, program IDs, and an RPC client; exposes `spend()` for raw
+/// vault drains and `pay()` for the atomic spend + reputation record_payment
+/// pair. Both take the service per-call so a single Spender can rotate across
+/// multiple registered services (one process, N services, M ticks/service).
 ///
 /// Construct once at startup, call repeatedly from the agent's main loop.
 pub struct Spender {
     pub agent: Keypair,
     pub owner: Pubkey,
-    pub service: Pubkey,
     pub usdc_mint: Pubkey,
     pub program: Pubkey,
     pub reputation_program: Pubkey,
@@ -274,8 +271,8 @@ pub struct Spender {
 }
 
 impl Spender {
-    pub fn spend(&self, amount_micro: u64) -> Result<Signature> {
-        let ix = self.build_spend_ix(amount_micro);
+    pub fn spend(&self, service: &Pubkey, amount_micro: u64) -> Result<Signature> {
+        let ix = self.build_spend_ix(service, amount_micro);
         self.submit(&[ix], &[&self.agent])
     }
 
@@ -290,13 +287,7 @@ impl Spender {
     ) -> Result<Signature> {
         let agent_pk = self.agent.pubkey();
         let service_pk = service_keypair.pubkey();
-        if service_pk != self.service {
-            return Err(anyhow!(
-                "service keypair pubkey {service_pk} does not match Spender.service {}",
-                self.service
-            ));
-        }
-        let spend = self.build_spend_ix(amount_micro);
+        let spend = self.build_spend_ix(&service_pk, amount_micro);
 
         let agent_profile = derive_agent_profile(&self.reputation_program, &agent_pk);
         let service_registry = derive_service_registry(&self.reputation_program, &service_pk);
@@ -341,12 +332,12 @@ impl Spender {
         }
     }
 
-    fn build_spend_ix(&self, amount_micro: u64) -> Instruction {
+    fn build_spend_ix(&self, service: &Pubkey, amount_micro: u64) -> Instruction {
         let agent_pk = self.agent.pubkey();
         let vault = derive_vault(&self.program, &self.owner, &agent_pk);
         let policy = derive_policy(&self.program, &vault);
         let vault_ata = derive_ata(&vault, &self.usdc_mint);
-        let service_ata = derive_ata(&self.service, &self.usdc_mint);
+        let service_ata = derive_ata(service, &self.usdc_mint);
         spend_ix(
             &self.program,
             &agent_pk,
