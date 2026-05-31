@@ -9,6 +9,8 @@ import '../../../../app/router.dart';
 import '../../../../app/theme.dart';
 import '../../../agents/presentation/add_agent_sheet.dart';
 import '../../../alerts/data/repositories/alerts_repository.dart';
+import '../../../services/presentation/bloc/services_bloc.dart';
+import '../../../services/presentation/pages/services_page.dart';
 import '../../../wallet/data/repositories/wallet_repository.dart';
 import '../activity/activity_feed.dart';
 import '../activity/activity_screen.dart';
@@ -20,7 +22,7 @@ import '../widgets/agent_card.dart';
 import '../widgets/sparkline.dart';
 import 'agent_detail_page.dart';
 
-enum _HomeTab { fleet, activity, alerts }
+enum _HomeTab { fleet, activity, services, alerts }
 
 @RoutePage()
 class FleetPage extends StatelessWidget {
@@ -106,9 +108,22 @@ class _FleetViewState extends State<_FleetView> {
         return _FleetTab(onBootstrap: _bootstrap);
       case _HomeTab.activity:
         return const _ActivityTab();
+      case _HomeTab.services:
+        return const _ServicesTab();
       case _HomeTab.alerts:
         return const _AlertsTab();
     }
+  }
+}
+
+class _ServicesTab extends StatelessWidget {
+  const _ServicesTab();
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => GetIt.I<ServicesBloc>(),
+      child: const ServicesPage(),
+    );
   }
 }
 
@@ -793,6 +808,12 @@ class _FloatingTabBar extends StatelessWidget {
                 onTap: () => onChanged(_HomeTab.activity),
               ),
               _TabItem(
+                icon: _servicesIconPath,
+                label: 'Services',
+                selected: current == _HomeTab.services,
+                onTap: () => onChanged(_HomeTab.services),
+              ),
+              _TabItem(
                 icon: _bellIconPath,
                 label: 'Alerts',
                 selected: current == _HomeTab.alerts,
@@ -1009,6 +1030,7 @@ class _ErrorView extends StatelessWidget {
 const IconData _fleetIconPath = Icons.dashboard_outlined;
 const IconData _bellIconPath = Icons.notifications_none_rounded;
 const IconData _activityIconPath = Icons.show_chart;
+const IconData _servicesIconPath = Icons.api_outlined;
 
 String _shortPubkey(String pk, [int n = 4]) =>
     pk.length <= n * 2 ? pk : '${pk.substring(0, n)}…${pk.substring(pk.length - n)}';

@@ -18,6 +18,12 @@ import '../features/fleet/data/repositories/fleet_repository.dart';
 import '../features/fleet/presentation/bloc/fleet_bloc.dart';
 import '../features/onboarding/data/onchain/agent_provisioning_service.dart';
 import '../features/onboarding/presentation/bloc/onboarding_bloc.dart';
+import '../features/services/data/datasources/service_key_store.dart';
+import '../features/services/data/datasources/service_seed_derivation.dart';
+import '../features/services/data/onchain/service_provisioning_service.dart';
+import '../features/services/data/repositories/services_repository.dart';
+import '../features/services/domain/usecases/register_service.dart';
+import '../features/services/presentation/bloc/services_bloc.dart';
 import '../features/wallet/data/datasources/auth_token_store.dart';
 import '../features/wallet/data/datasources/mwa_datasource.dart';
 import '../features/wallet/data/datasources/wallet_balance_service.dart';
@@ -98,6 +104,32 @@ Future<void> configureDependencies() async {
 
   sl.registerLazySingleton<SignInWithSolana>(
     () => SignInWithSolana(sl<AuthRepository>(), sl<WalletRepository>()),
+  );
+
+  // Services — register, list, key-derive. Same shape as the agent
+  // graph above; service seeds reuse the wallet master signature but
+  // live in a distinct HMAC keyspace so they don't collide with agents.
+  sl.registerLazySingleton<ServiceKeyStore>(ServiceKeyStore.new);
+  sl.registerLazySingleton<ServiceSeedDerivation>(
+    () => ServiceSeedDerivation(sl<WalletRepository>()),
+  );
+  sl.registerLazySingleton<ServiceProvisioningService>(
+    ServiceProvisioningService.new,
+  );
+  sl.registerLazySingleton<ServicesRepository>(
+    () => ServicesRepository(sl<DioClient>().dio),
+  );
+  sl.registerLazySingleton<RegisterServiceUseCase>(
+    () => RegisterServiceUseCase(
+      sl<ServiceSeedDerivation>(),
+      sl<ServiceProvisioningService>(),
+      sl<MwaDataSource>(),
+      sl<ServiceKeyStore>(),
+      sl<TxPreflight>(),
+    ),
+  );
+  sl.registerFactory<ServicesBloc>(
+    () => ServicesBloc(sl<ServicesRepository>(), sl<RegisterServiceUseCase>()),
   );
 
   sl.registerFactory<OnboardingBloc>(
