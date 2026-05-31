@@ -5,9 +5,17 @@ export default defineConfig({
     index: "src/index.ts",
     "idl/reputation": "src/idl/reputation.ts",
     "idl/credit-vault": "src/idl/credit-vault.ts",
+    cli: "src/cli.ts",
   },
   format: ["esm", "cjs"],
-  dts: true,
+  // CLI isn't a public type surface — only emit .d.ts for library entries.
+  dts: {
+    entry: {
+      index: "src/index.ts",
+      "idl/reputation": "src/idl/reputation.ts",
+      "idl/credit-vault": "src/idl/credit-vault.ts",
+    },
+  },
   sourcemap: true,
   clean: true,
   treeshake: true,

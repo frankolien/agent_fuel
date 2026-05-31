@@ -2,7 +2,42 @@
 
 TypeScript SDK for [Agent Fuel](https://github.com/TODO/agent_fuel) — credit vault + reputation primitives for AI agents on Solana.
 
-> **Status:** `0.1.0`. Full read/write/stream surface live, published to npm with provenance.
+> **Status:** `0.3.0`. Full read/write/stream surface live, plus the `agent-fuel` CLI. Published to npm with provenance.
+
+## CLI
+
+Installing the package also installs an `agent-fuel` binary. Read commands work with zero setup over `npx`:
+
+```bash
+npx @agent-fuel/sdk vault   <OWNER_PUBKEY> <AGENT_PUBKEY>
+npx @agent-fuel/sdk score   <AGENT_PUBKEY>
+npx @agent-fuel/sdk policy  <OWNER_PUBKEY> <AGENT_PUBKEY>
+npx @agent-fuel/sdk service <AUTHORITY_PUBKEY>
+```
+
+Action commands take a `solana-keygen`-style keypair JSON:
+
+```bash
+agent-fuel pay \
+  --keypair         ~/.config/solana/agent.json \
+  --service-keypair ~/.config/solana/svc-pyth.json \
+  --owner           <OWNER_PUBKEY> \
+  --amount          0.5
+
+agent-fuel request-spend \
+  --keypair ~/.config/solana/agent.json \
+  --owner   <OWNER_PUBKEY> \
+  --service <SERVICE_PUBKEY> \
+  --amount  30
+
+agent-fuel register-service \
+  --sponsor         ~/.config/solana/id.json \
+  --service-keypair ~/.config/solana/svc-pyth.json \
+  --name            "Pyth BTC Feed" \
+  --category        DataFeed
+```
+
+Plus `agent-fuel keygen [--out path]` to generate a fresh keypair (pubkey to stdout, secret to stderr — redirect with `2>` to save). Global flags: `--cluster devnet|mainnet-beta|testnet|localnet`, `--rpc <url>`, `--api-base <url>`, `--json` for machine-readable output.
 
 ## The six functions
 

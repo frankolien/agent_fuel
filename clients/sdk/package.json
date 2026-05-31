@@ -1,6 +1,6 @@
 {
   "name": "@agent-fuel/sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TypeScript SDK for Agent Fuel — credit vault + reputation primitives for AI agents on Solana.",
   "license": "Apache-2.0",
   "repository": {
@@ -26,6 +26,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "agent-fuel": "./dist/cli.cjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -82,6 +85,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.0",
     "@solana/spl-token": "^0.4.14",
+    "commander": "^12.1.0",
     "ws": "^8.21.0"
   }
 }

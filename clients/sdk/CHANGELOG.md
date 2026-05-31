@@ -2,6 +2,16 @@
 
 All notable changes to `@agent-fuel/sdk` are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-05-31
+
+### Added
+
+- `agent-fuel` CLI binary. Same install (`npm i -g @agent-fuel/sdk` or `npx @agent-fuel/sdk …`), three command surfaces:
+  - **Read** (no key) — `score <agent>`, `vault <owner> <agent>`, `policy <owner> <agent>`, `service <authority>`. Hit the live backend / on-chain account directly, no setup needed: `npx @agent-fuel/sdk vault <owner> <agent>` works out of the box.
+  - **Action** (`--keypair`) — `pay`, `request-spend`, `register-service`. Same primitives as the JS surface, with keypairs loaded from `solana-keygen`-style JSON files.
+  - **Dev** — `keygen [--out path]` (writes a fresh keypair; pubkey to stdout, secret to stderr so you can redirect), `--version`, `--help`.
+- Global flags: `--cluster <name>` (default `devnet`), `--rpc <url>` override, `--api-base <url>` (default `https://api.agentfuel.online`), `--json` for machine-readable output piping into `jq`.
+
 ## [0.2.0] — 2026-05-31
 
 ### Added
