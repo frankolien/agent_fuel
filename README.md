@@ -93,6 +93,16 @@ npm install @agent-fuel/sdk
 
 Peer deps: `@solana/web3.js ^1.95`, `@coral-xyz/anchor ^0.31`. Node ≥ 18.18.
 
+The package also ships an `agent-fuel` CLI. Inspect anything on chain with zero setup:
+
+```bash
+npx @agent-fuel/sdk vault   <OWNER_PUBKEY> <AGENT_PUBKEY>
+npx @agent-fuel/sdk score   <AGENT_PUBKEY>
+npx @agent-fuel/sdk service <AUTHORITY_PUBKEY>
+```
+
+Full surface in [`clients/sdk/README.md`](clients/sdk/README.md#cli).
+
 ## The Six Functions
 
 The entire SDK surface, mirroring the [landing page](clients/sdk/README.md):
