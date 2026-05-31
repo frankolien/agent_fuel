@@ -6,7 +6,8 @@ use actix_cors::Cors;
 use actix_governor::GovernorConfigBuilder;
 use actix_web::{http::header, middleware, web, App, HttpServer};
 use agent_fuel_backend::{
-    config::Config, db, notifier::LogNotifier, routes, routes::Limits, score, state::AppState,
+    config::Config, db, fcm::FcmNotifier, notifier::{LogNotifier, Notifier}, routes,
+    routes::Limits, score, state::AppState,
 };
 use tracing_actix_web::TracingLogger;
 
@@ -80,6 +81,32 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    let notifier: Arc<dyn Notifier> = match FcmNotifier::build(
+        pool.clone(),
+        cfg.fcm_service_account_path.as_deref(),
+        cfg.fcm_service_account_b64.as_deref(),
+    ) {
+        Ok(Some(fcm)) => {
+            tracing::info!(
+                project_id = %fcm.project_id(),
+                client_email = %fcm.client_email(),
+                "FCM push notifications enabled"
+            );
+            Arc::new(fcm)
+        }
+        Ok(None) => {
+            tracing::warn!(
+                "FCM_SERVICE_ACCOUNT_PATH/B64 unset — falling back to LogNotifier; \
+                 alerts visible only in backend logs (no device pushes)"
+            );
+            Arc::new(LogNotifier)
+        }
+        Err(err) => {
+            tracing::error!(error = %err, "FCM init failed; falling back to LogNotifier");
+            Arc::new(LogNotifier)
+        }
+    };
+
     let state = web::Data::new(AppState {
         pool,
         helius_webhook_secret: cfg.helius_webhook_secret.clone(),
@@ -88,9 +115,7 @@ async fn main() -> anyhow::Result<()> {
         siws_domain: cfg.siws_domain.clone(),
         siws_chain_id: cfg.siws_chain_id.clone(),
         ws_hub: agent_fuel_backend::ws_hub::WsHub::default(),
-        // LogNotifier is the dev default; a real FCM dispatcher slots in
-        // here once FCM_SERVICE_ACCOUNT_JSON is provisioned.
-        notifier: Arc::new(LogNotifier),
+        notifier,
         rpc_client,
     });
     let bind = cfg.bind_addr.clone();

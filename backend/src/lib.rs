@@ -5,6 +5,7 @@ pub mod config;
 pub mod db;
 pub mod dev_airdrop;
 pub mod events;
+pub mod fcm;
 pub mod mirror;
 pub mod notifier;
 pub mod parser;

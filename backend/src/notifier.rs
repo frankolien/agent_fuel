@@ -63,14 +63,10 @@ pub trait Notifier: Send + Sync + 'static {
     async fn dispatch(&self, alert: &Alert);
 }
 
-/// Dev-default notifier. Logs the alert at INFO level instead of calling
-/// FCM.
-///
-/// **Deployed configuration is log-only in v0.1.** A real `FcmNotifier`
-/// implementing this trait slots in once `FCM_SERVICE_ACCOUNT_JSON` is
-/// provisioned; until then push notifications are visible only in backend
-/// logs, not on the user's device. Tracked in `docs/maintenance.md` and
-/// surfaced in `docs/backend-local-dev.md`'s "Known limitations" section.
+/// Fallback notifier. Logs the alert at INFO level. Active whenever
+/// `FCM_SERVICE_ACCOUNT_PATH` / `FCM_SERVICE_ACCOUNT_B64` is unset, or
+/// when the service-account JSON fails to parse — alerts are still
+/// observable in backend logs even with no device pushes.
 pub struct LogNotifier;
 
 #[async_trait]

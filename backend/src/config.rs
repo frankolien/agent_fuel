@@ -36,6 +36,16 @@ pub struct Config {
     /// byte-array form base64'd. Takes precedence over the file-path var if
     /// both are set. Production deploys MUST leave this unset.
     pub dev_airdrop_authority_b64: Option<String>,
+    /// Filesystem path to a Firebase service-account JSON. One of two ways
+    /// to enable real FCM push notifications. Set with
+    /// `FCM_SERVICE_ACCOUNT_PATH`. Cloud deploys (Railway, Render, Fly)
+    /// should prefer the base64 variant below.
+    pub fcm_service_account_path: Option<String>,
+    /// Base64-encoded Firebase service-account JSON — for cloud deploys
+    /// that can't mount a file. Takes precedence over the path var if both
+    /// are set. Leaving both unset falls back to the `LogNotifier`
+    /// (alerts visible only in backend logs).
+    pub fcm_service_account_b64: Option<String>,
 }
 
 impl Config {
@@ -85,6 +95,13 @@ impl Config {
             .ok()
             .filter(|s| !s.is_empty());
 
+        let fcm_service_account_path = env::var("FCM_SERVICE_ACCOUNT_PATH")
+            .ok()
+            .filter(|s| !s.is_empty());
+        let fcm_service_account_b64 = env::var("FCM_SERVICE_ACCOUNT_B64")
+            .ok()
+            .filter(|s| !s.is_empty());
+
         Ok(Self {
             bind_addr,
             database_url,
@@ -100,6 +117,8 @@ impl Config {
             dev_airdrop_mint,
             dev_airdrop_authority_path,
             dev_airdrop_authority_b64,
+            fcm_service_account_path,
+            fcm_service_account_b64,
         })
     }
 }
