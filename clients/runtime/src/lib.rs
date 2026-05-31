@@ -110,6 +110,29 @@ pub fn record_payment_ix(
     }
 }
 
+/// Builds the reputation-program `compute_score` instruction. Permissionless:
+/// any signer can poke a recompute, since the inputs (transaction count,
+/// service diversity, streak, tenure, feedback) are already public on chain.
+/// We bundle this after `record_payment` in `pay()` / `pay_batch()` so the
+/// on-chain `agent_profile.score` — and the backend mirror that follows
+/// the resulting `ScoreComputed` event — actually advances when the agent
+/// makes a payment. Without it, the score stays at its initial value
+/// because nothing in the codebase triggers compute_score on its own.
+pub fn compute_score_ix(
+    reputation_program: &Pubkey,
+    caller: &Pubkey,
+    agent_profile: &Pubkey,
+) -> Instruction {
+    Instruction {
+        program_id: *reputation_program,
+        accounts: vec![
+            AccountMeta::new_readonly(*caller, true),
+            AccountMeta::new(*agent_profile, false),
+        ],
+        data: anchor_discriminator(b"global:compute_score").to_vec(),
+    }
+}
+
 pub fn anchor_discriminator(name: &[u8]) -> [u8; 8] {
     let mut h = Sha256::new();
     h.update(name);
@@ -308,8 +331,9 @@ impl Spender {
             amount_micro,
             receipt_hash,
         );
+        let compute = compute_score_ix(&self.reputation_program, &agent_pk, &agent_profile);
 
-        self.submit(&[spend, record], &[&self.agent, service_keypair])
+        self.submit(&[spend, record, compute], &[&self.agent, service_keypair])
     }
 
     /// Atomic spend + record_payment for N items, all signed by the same
@@ -340,7 +364,7 @@ impl Spender {
             &service_registry,
         );
 
-        let mut ixs = Vec::with_capacity(items.len() * 2);
+        let mut ixs = Vec::with_capacity(items.len() * 2 + 1);
         for (amount_micro, receipt_hash) in items {
             ixs.push(self.build_spend_ix(&service_pk, *amount_micro));
             let receipt_used =
@@ -356,6 +380,14 @@ impl Spender {
                 *receipt_hash,
             ));
         }
+        // One compute_score after the whole batch — counters have been
+        // bumped by every record_payment above, so the score reflects the
+        // post-batch totals in the same tx.
+        ixs.push(compute_score_ix(
+            &self.reputation_program,
+            &agent_pk,
+            &agent_profile,
+        ));
         self.submit(&ixs, &[&self.agent, service_keypair])
     }
 
