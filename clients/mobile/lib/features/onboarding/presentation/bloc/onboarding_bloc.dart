@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../app/di.dart';
 import '../../../../core/error/exceptions.dart';
+import '../../../../core/notifications/fcm_service.dart';
 import '../../../agents/domain/usecases/provision_agent.dart';
 import '../../../auth/data/datasources/biometric_service.dart';
 import '../../../auth/domain/usecases/sign_in_with_solana.dart';
@@ -143,6 +147,11 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
         pubkeyBase58: wallet.pubkeyBase58,
         walletAuthToken: wallet.authToken,
       );
+
+      // JWT now in the store — fire-and-forget the FCM device registration
+      // so lock-screen approval pushes start arriving without blocking the
+      // onboarding flow on a network round-trip or a denied permission.
+      unawaited(sl<FcmService>().registerForOwner(wallet.pubkeyBase58));
 
       // If the wallet already owns agents on chain, skip the wizard and let
       // the OnboardingPage redirect to Fleet via BlocListener.

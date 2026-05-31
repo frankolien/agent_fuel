@@ -19,6 +19,13 @@ target/idl/
 target/deploy/*-keypair.json
 
 # ============================================================================
+# Firebase secrets — NEVER commit these.
+# ============================================================================
+clients/mobile/android/app/google-services.json
+clients/mobile/ios/Runner/GoogleService-Info.plist
+**/*-firebase-adminsdk-*.json
+
+# ============================================================================
 # Local tooling not part of project source
 
 skills-lock.json

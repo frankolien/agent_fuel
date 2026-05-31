@@ -1,6 +1,7 @@
 import 'package:get_it/get_it.dart';
 
 import '../core/network/dio_client.dart';
+import '../core/notifications/fcm_service.dart';
 import '../core/onchain/dev_airdrop_service.dart';
 import '../core/onchain/tx_preflight.dart';
 import '../features/auth/data/datasources/biometric_service.dart';
@@ -56,6 +57,7 @@ Future<void> configureDependencies() async {
     () => DevAirdropService(sl<DioClient>()),
   );
   sl.registerLazySingleton<WalletBalanceService>(WalletBalanceService.new);
+  sl.registerLazySingleton<FcmService>(() => FcmService(sl<DioClient>()));
   sl.registerLazySingleton<AgentProvisioningService>(
     AgentProvisioningService.new,
   );

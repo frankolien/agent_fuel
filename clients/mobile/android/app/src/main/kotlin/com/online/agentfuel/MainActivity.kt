@@ -1,4 +1,4 @@
-package online.agentfuel.agent_fuel_mobile
+package com.online.agentfuel
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 
