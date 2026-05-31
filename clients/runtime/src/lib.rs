@@ -312,6 +312,81 @@ impl Spender {
         self.submit(&[spend, record], &[&self.agent, service_keypair])
     }
 
+    /// Atomic spend + record_payment for N items, all signed by the same
+    /// service keypair, in one transaction. For high-throughput bots
+    /// (ML inference, RPC frontends) where per-call tx latency + fees
+    /// would dominate: amortise both across a batch. Same anti-replay
+    /// guarantee per-item via distinct receipt hashes.
+    ///
+    /// Items are `(amount_micro, receipt_hash)`. Transaction size is
+    /// bounded by Solana's 1232-byte limit — practical ceiling is ~10
+    /// items per batch with the current account-meta layout. Callers
+    /// should flush at that bound or smaller.
+    pub fn pay_batch(
+        &self,
+        items: &[(u64, [u8; 32])],
+        service_keypair: &Keypair,
+    ) -> Result<Signature> {
+        if items.is_empty() {
+            return Err(anyhow!("pay_batch called with no items"));
+        }
+        let service_pk = service_keypair.pubkey();
+        let agent_pk = self.agent.pubkey();
+        let agent_profile = derive_agent_profile(&self.reputation_program, &agent_pk);
+        let service_registry = derive_service_registry(&self.reputation_program, &service_pk);
+        let agent_service_link = derive_agent_service_link(
+            &self.reputation_program,
+            &agent_profile,
+            &service_registry,
+        );
+
+        let mut ixs = Vec::with_capacity(items.len() * 2);
+        for (amount_micro, receipt_hash) in items {
+            ixs.push(self.build_spend_ix(&service_pk, *amount_micro));
+            let receipt_used =
+                derive_receipt_used(&self.reputation_program, receipt_hash);
+            ixs.push(record_payment_ix(
+                &self.reputation_program,
+                &service_pk,
+                &agent_profile,
+                &service_registry,
+                &agent_service_link,
+                &receipt_used,
+                *amount_micro,
+                *receipt_hash,
+            ));
+        }
+        self.submit(&ixs, &[&self.agent, service_keypair])
+    }
+
+    /// Agent-initiated half of the over-limit approval flow: enqueues a
+    /// pending request the owner can later approve via mobile / CLI. The
+    /// returned pubkey is the `PendingSpend` PDA the caller can poll for
+    /// resolution. Reads the current `pending_count` off the vault to
+    /// derive the nonce; concurrent requestors race here, so retry on
+    /// `AccountAlreadyInUse`.
+    pub fn request_spend(
+        &self,
+        service: &Pubkey,
+        amount_micro: u64,
+    ) -> Result<(Signature, Pubkey, u64)> {
+        let agent_pk = self.agent.pubkey();
+        let vault = derive_vault(&self.program, &self.owner, &agent_pk);
+        let service_ata = derive_ata(service, &self.usdc_mint);
+        let nonce = fetch_pending_count(&self.rpc, &vault)?;
+        let pending_spend = derive_pending_spend(&self.program, &vault, nonce);
+        let ix = request_spend_ix(
+            &self.program,
+            &agent_pk,
+            &vault,
+            &service_ata,
+            &pending_spend,
+            amount_micro,
+        );
+        let sig = self.submit(&[ix], &[&self.agent])?;
+        Ok((sig, pending_spend, nonce))
+    }
+
     // Sign, send, confirm. On `send_and_confirm_transaction` failure, the
     // error chain already includes the simulation logs from the RPC client —
     // but we wrap with the program log lines extracted from the chained
