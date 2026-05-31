@@ -11,16 +11,21 @@ class RepRing extends StatelessWidget {
     required this.score,
     this.size = 46,
     this.status = RepRingStatus.active,
+    this.approximate = false,
   });
 
   final int score;
   final double size;
   final RepRingStatus status;
+  // True when `score` is a client-side approximation pending the next
+  // on-chain ScoreComputed event. Renders the number in muted ink to
+  // signal "not yet final" without dropping back to the '—' placeholder.
+  final bool approximate;
 
   @override
   Widget build(BuildContext context) {
     final mono = Theme.of(context).extension<AFTypography>()!.mono;
-    final color = _color(status);
+    final color = approximate ? AFColors.muted : _color(status);
     return SizedBox(
       width: size,
       height: size,

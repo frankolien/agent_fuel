@@ -20,9 +20,10 @@ class AgentCardView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mono = Theme.of(context).extension<AFTypography>()!.mono;
-    final fraction = (agent.score / 1000).clamp(0.0, 1.0);
+    final shownScore = agent.liveScore;
+    final fraction = (shownScore / 1000).clamp(0.0, 1.0);
     final value = _fmtUsd(agent.totalVolumeUsdc / 1000000);
-    final scoreStatus = !agent.isScored
+    final scoreStatus = shownScore <= 0
         ? RepRingStatus.frozen
         : agent.activeNegativeFeedbackCount > 0
             ? RepRingStatus.warning
@@ -40,7 +41,11 @@ class AgentCardView extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              RepRing(score: agent.score, status: scoreStatus),
+              RepRing(
+                score: shownScore,
+                status: scoreStatus,
+                approximate: agent.liveScoreIsApproximate,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -97,7 +102,7 @@ class AgentCardView extends StatelessWidget {
           const SizedBox(height: 10),
           Padding(
             padding: const EdgeInsets.only(left: 60),
-            child: _ThinGauge(fraction: fraction, scored: agent.isScored),
+            child: _ThinGauge(fraction: fraction, scored: shownScore > 0),
           ),
         ],
       ),

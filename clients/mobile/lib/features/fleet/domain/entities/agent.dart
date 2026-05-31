@@ -48,6 +48,44 @@ class Agent extends Equatable {
 
   bool get isScored => score > 0;
 
+  /// Score to render in the UI. Falls back to a local approximation
+  /// derived from the on-chain counters when the authoritative score
+  /// is 0 but the agent has actually transacted — covers the window
+  /// between the first payment and the first ScoreComputed event
+  /// (the bot SDK now bundles compute_score into pay() so this gap
+  /// only matters for agents using the older pre-bundled flow or for
+  /// services that recorded payments without calling compute_score).
+  int get liveScore {
+    if (score > 0) return score;
+    if (totalTransactions == 0) return 0;
+    return _approxScoreNoTenure();
+  }
+
+  bool get liveScoreIsApproximate => score == 0 && totalTransactions > 0;
+
+  // Mirrors ReputationFactors but skips the tenure component (which
+  // needs currentSlot). Approximate scores cap at 850/1000 — close
+  // enough for a placeholder until the real ScoreComputed lands.
+  int _approxScoreNoTenure() {
+    int volume;
+    if (totalTransactions == 0) {
+      volume = 0;
+    } else if (totalTransactions <= 9) {
+      volume = 50;
+    } else if (totalTransactions <= 99) {
+      volume = 125;
+    } else {
+      volume = 250;
+    }
+    final diversity = 50 * servicesUsed.clamp(0, 4);
+    final streak = 10 * consecutiveSuccess.clamp(0, 15);
+    final feedback = totalFeedbackCount == 0
+        ? 100
+        : (250 - 250 * activeNegativeFeedbackCount.clamp(0, totalFeedbackCount) ~/ totalFeedbackCount)
+            .clamp(0, 250);
+    return (volume + diversity + streak + feedback).clamp(0, 1000);
+  }
+
   @override
   List<Object?> get props => [
         pubkey,

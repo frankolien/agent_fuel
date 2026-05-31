@@ -102,7 +102,7 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.only(top: 4, bottom: 36),
             children: [
-              _DetailNav(active: _agent.isScored),
+              _DetailNav(active: _agent.liveScore > 0),
               _DetailHero(agent: _agent, mono: mono),
               _DialCard(agent: _agent, delta: widget.scoreDelta, mono: mono),
               const SizedBox(height: 4),
@@ -549,7 +549,8 @@ class _DialCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final score = agent.score;
+    final score = agent.liveScore;
+    final approximate = agent.liveScoreIsApproximate;
     final tier = _tier(score);
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -597,17 +598,19 @@ class _DialCard extends StatelessWidget {
                     Text(
                       score <= 0 ? '—' : score.toString().padLeft(3, '0'),
                       style: mono.displayLarge?.copyWith(
-                        color: AFColors.mint,
+                        color: approximate ? AFColors.muted : AFColors.mint,
                         fontSize: 60,
                         fontWeight: FontWeight.w600,
                         height: 1,
                         letterSpacing: -1.8,
-                        shadows: const [
-                          Shadow(
-                            color: AFColors.mintGlow,
-                            blurRadius: 24,
-                          ),
-                        ],
+                        shadows: approximate
+                            ? null
+                            : const [
+                                Shadow(
+                                  color: AFColors.mintGlow,
+                                  blurRadius: 24,
+                                ),
+                              ],
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -926,8 +929,8 @@ class _CreditVaultCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           _VaultGauge(
-            fraction: (agent.score / 1000).clamp(0.0, 1.0),
-            scored: agent.isScored,
+            fraction: (agent.liveScore / 1000).clamp(0.0, 1.0),
+            scored: agent.liveScore > 0,
           ),
           const SizedBox(height: 14),
           _MiniGrid(agent: agent, mono: mono),
