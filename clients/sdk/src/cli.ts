@@ -17,12 +17,13 @@ import { dirname } from "node:path";
 
 import { AgentFuel } from "./client.js";
 import type { Cluster } from "./client.js";
+import { AccountNotFoundError } from "./errors.js";
 import { pay } from "./pay.js";
 import { registerService } from "./register-service.js";
 import { requestSpend } from "./request-spend.js";
 import type { ServiceCategory } from "./types.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 
 const RPC_DEFAULTS: Record<Cluster, string> = {
   "mainnet-beta": "https://api.mainnet-beta.solana.com",
@@ -169,6 +170,24 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+// AccountNotFoundError carries a raw PDA — useless to a CLI user who has no
+// idea which derivation produced it. Wrap each command so we can rephrase
+// "account not found: <PDA>" into something that names the resource and the
+// inputs that produced the lookup.
+async function rephraseNotFound<T>(
+  fn: () => Promise<T>,
+  reword: (pda: string) => string,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof AccountNotFoundError) {
+      throw new Error(reword(e.account));
+    }
+    throw e;
+  }
+}
+
 function explorerUrl(cluster: Cluster, sig: string): string {
   const suffix = cluster === "mainnet-beta" ? "" : `?cluster=${cluster}`;
   return `https://explorer.solana.com/tx/${sig}${suffix}`;
@@ -206,7 +225,11 @@ program
     const g = readGlobalOpts(cmd);
     const agentPk = parsePubkey(agent, "<agent>");
     const fuel = readOnlyFuel(g);
-    const score = await fuel.getScore(agentPk);
+    const score = await rephraseNotFound(
+      () => fuel.getScore(agentPk),
+      () =>
+        `no reputation data yet for agent ${agent} — the backend has no AgentProfile mirror for this agent (it hasn't received any recorded payments)`,
+    );
     emit(g, () => formatScore(score), score);
   });
 
@@ -218,7 +241,11 @@ program
     const ownerPk = parsePubkey(owner, "<owner>");
     const agentPk = parsePubkey(agent, "<agent>");
     const fuel = readOnlyFuel(g);
-    const vault = await fuel.getVaultBalance({ owner: ownerPk, agent: agentPk });
+    const vault = await rephraseNotFound(
+      () => fuel.getVaultBalance({ owner: ownerPk, agent: agentPk }),
+      (pda) =>
+        `no vault found at ${pda} for owner=${owner} agent=${agent} — has init_vault been called for this pair?`,
+    );
     emit(g, () => formatVault(vault), vault);
   });
 
@@ -230,7 +257,11 @@ program
     const ownerPk = parsePubkey(owner, "<owner>");
     const agentPk = parsePubkey(agent, "<agent>");
     const fuel = readOnlyFuel(g);
-    const policy = await fuel.getPolicy({ owner: ownerPk, agent: agentPk });
+    const policy = await rephraseNotFound(
+      () => fuel.getPolicy({ owner: ownerPk, agent: agentPk }),
+      (pda) =>
+        `no spend policy found at ${pda} for owner=${owner} agent=${agent} — policy is created alongside the vault, so this usually means init_vault hasn't been called`,
+    );
     emit(g, () => formatPolicy(policy), policy);
   });
 
@@ -241,7 +272,11 @@ program
     const g = readGlobalOpts(cmd);
     const authPk = parsePubkey(authority, "<authority>");
     const fuel = readOnlyFuel(g);
-    const svc = await fuel.checkService(authPk);
+    const svc = await rephraseNotFound(
+      () => fuel.checkService(authPk),
+      (pda) =>
+        `no service registered for authority ${authority} (registry PDA ${pda} doesn't exist) — run \`agent-fuel register-service\` to create one`,
+    );
     emit(g, () => formatService(svc), svc);
   });
 
@@ -279,14 +314,19 @@ program
       const owner = parsePubkey(opts.owner, "--owner");
       const amountUsdc = parseAmountToMicro(opts.amount);
       const receiptHash = parseReceiptHash(opts.receiptHash);
-      const result = await pay({
-        agent,
-        service,
-        owner,
-        amountUsdc,
-        receiptHash,
-        connection: connectionFor(g),
-      });
+      const result = await rephraseNotFound(
+        () =>
+          pay({
+            agent,
+            service,
+            owner,
+            amountUsdc,
+            receiptHash,
+            connection: connectionFor(g),
+          }),
+        (pda) =>
+          `pay failed: account not found at ${pda} — either the vault for owner=${opts.owner} agent=${agent.publicKey.toBase58()} doesn't exist, or the spend policy hasn't been created. Try \`agent-fuel vault ${opts.owner} ${agent.publicKey.toBase58()}\` to verify.`,
+      );
       emit(
         g,
         () =>

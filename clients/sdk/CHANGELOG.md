@@ -2,6 +2,12 @@
 
 All notable changes to `@agent-fuel/sdk` are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-05-31
+
+### Changed
+
+- CLI: replace the generic `account not found: <PDA>` with command-specific messages that name the missing resource and the inputs that produced the lookup. `agent-fuel vault Cowi… 5ro8…` now reports `no vault found at <PDA> for owner=Cowi… agent=5ro8… — has init_vault been called for this pair?` instead of dumping a raw PDA the user has no way to map back. Applies to `score`, `vault`, `policy`, `service`, and `pay`.
+
 ## [0.3.0] — 2026-05-31
 
 ### Added
