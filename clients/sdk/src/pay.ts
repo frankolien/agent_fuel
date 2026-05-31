@@ -154,10 +154,24 @@ export async function pay(args: PayArgs): Promise<PayResult> {
       receiptUsed: receipt,
       systemProgram: SystemProgram.programId,
     }) as unknown as InstructionBuilder;
-  const spendIx = await spendBuilder.instruction();
-  const recordIx = await recordBuilder.instruction();
+  // Tack on compute_score so the on-chain agent_profile.score (and the
+  // backend's `agents.score` mirror, fed only by ScoreComputed events)
+  // refreshes in the same tx as the payment. Without this every paying
+  // agent's score stays at 0 in the DB until someone manually calls
+  // compute_score — which nothing in the codebase does. The instruction
+  // is permissionless and reads the counters record_payment just bumped,
+  // so the score reflects the freshly-incremented totals.
+  const computeBuilder = rep.methods.computeScore().accounts({
+    caller: agent.publicKey,
+    agentProfile,
+  }) as unknown as InstructionBuilder;
+  const [spendIx, recordIx, computeIx] = await Promise.all([
+    spendBuilder.instruction(),
+    recordBuilder.instruction(),
+    computeBuilder.instruction(),
+  ]);
 
-  const tx = new Transaction().add(createAtaIx, spendIx, recordIx);
+  const tx = new Transaction().add(createAtaIx, spendIx, recordIx, computeIx);
   try {
     const signature = await sendAndConfirmTransaction(
       connection,

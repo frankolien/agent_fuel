@@ -23,7 +23,7 @@ import { registerService } from "./register-service.js";
 import { requestSpend } from "./request-spend.js";
 import type { ServiceCategory } from "./types.js";
 
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 
 const RPC_DEFAULTS: Record<Cluster, string> = {
   "mainnet-beta": "https://api.mainnet-beta.solana.com",

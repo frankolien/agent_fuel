@@ -2,6 +2,12 @@
 
 All notable changes to `@agent-fuel/sdk` are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] — 2026-05-31
+
+### Changed
+
+- `pay()` now bundles `compute_score` as a third instruction in the same atomic transaction. Without this, every paying agent's `agent_profile.score` stayed at its initial value until someone manually invoked `compute_score` — and nothing in the codebase did. The backend mirrors `agents.score` from `ScoreComputed` events only, so the displayed score was effectively stuck at 0 for the entire lifetime of any agent using the SDK's high-level helper. Adding the instruction inside the same tx means the score reflects the freshly-incremented counters with no extra round-trip and no race window where the spend lands but the score-update tx is lost.
+
 ## [0.3.1] — 2026-05-31
 
 ### Changed
