@@ -70,13 +70,6 @@ The SDK is the only surface most developers touch. Programs hold the truth — e
 | Sample service registry | `3PCx6TrxQ658Bh9JVNg2JtgtPcRANVfiZsYXmNRMNhgJ` | [view](https://explorer.solana.com/address/3PCx6TrxQ658Bh9JVNg2JtgtPcRANVfiZsYXmNRMNhgJ?cluster=devnet) |
 | Live x402 spend | `3yb8QQ…1qkVe` | [view](https://explorer.solana.com/tx/3yb8QQ8PbGM8N9KAgTmNhoNirWvvgMSyqipDk87jUDdBuqD1UnRvqkZnP5zXf6SXfJZ17KPN25GFomni8391qkVe?cluster=devnet) |
 
-> **Note (May 28, 2026):** the `reputation` program just shipped a breaking
-> upgrade to `register_service` — it now splits `sponsor` (rent payer) and
-> `service` (identity) signers, adds a 128-byte `service_uri` metadata field,
-> and gains a `set_service_active` instruction for pause/resume. Existing
-> ServiceRegistry accounts created before this upgrade can't be deserialized
-> with the new layout; re-register any devnet services you care about.
-
 The vault above was created via the bootstrap script, funded with 20 test-USDC, and then *paid 1 test-USDC to a registered service through the x402 protocol* — a real end-to-end demo verifiable on chain. Re-run it yourself:
 
 ```bash
@@ -87,6 +80,8 @@ cd examples/x402-quickstart
 node server.mjs &             # x402 server demanding 1 test-USDC per /feed request
 X402_REAL=1 node client.mjs   # agent pays, retries, succeeds
 ```
+
+The dev-USDC mint above (`EMm5UveN…jFXDg` for credit_vault), Helius webhook secret, and the optional `/api/dev/airdrop` mint-authority key are all configured via env on Railway — see [`.env.example`](.env.example) for the surface.
 
 ---
 
@@ -166,7 +161,7 @@ The Anchor programs **have not been audited.** They have passing unit tests, Lit
 agent_fuel/
 ├── programs/
 │   ├── reputation/                # AgentProfile + ServiceRegistry + FeedbackRecord PDAs
-│   └── credit_vault/              # CreditVault + SpendPolicy PDAs + USDC ATA
+│   └── credit_vault/              # CreditVault + SpendPolicy + PendingSpend PDAs + USDC ATA
 ├── backend/                       # Actix-Web indexer + REST + WS API (Railway-deployable)
 │   ├── src/                       # Helius webhook → parser → mirror → score → WS broadcast
 │   ├── migrations/                # sqlx Postgres migrations
@@ -176,7 +171,16 @@ agent_fuel/
 │   │   ├── src/                   # AgentFuel class, paymentRequired, PDA helpers, typed errors
 │   │   ├── examples/x402-quickstart/  # Self-contained dry-run + real-devnet demo
 │   │   └── scripts/devnet-bootstrap.mjs  # End-to-end devnet provisioning
-│   └── web/                       # React + TS + Tailwind v4 dashboard (Vite)
+│   ├── web/                       # React + TS + Tailwind v4 dashboard (Vite)
+│   ├── mobile/                    # Flutter owner app — MWA wallet connect, biometric-gated
+│   │   ├── lib/features/onboarding/   # Wallet connect → SIWS → agent + vault provisioning
+│   │   ├── lib/features/fleet/        # Agent list, detail, vault actions, alerts, activity
+│   │   ├── lib/features/agent_keys/   # HMAC-derived seed recovery + secure key store
+│   │   └── lib/features/wallet/       # solana_mobile_client adapter
+│   └── runtime/                   # Reference Rust agent runtime + dogfood example
+│       ├── src/lib.rs             # Spender + PDA helpers + ix builders (consumable by any agent)
+│       ├── src/main.rs            # CLI: spend / request-spend / register-service
+│       └── examples/pyth_logger.rs  # Long-running BTC/USD bot — round-robins N services
 ├── tests/                         # TypeScript integration tests (Anchor)
 ├── railway.json                   # Tag-driven backend deploy
 └── .github/workflows/             # SDK CI + tag-driven npm publish with provenance
@@ -208,10 +212,12 @@ agent_fuel/
 |---|---|---|
 | `reputation` program | Solana devnet | [`4GjB4xdm…tiFShvQ`](https://explorer.solana.com/address/4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ?cluster=devnet) |
 | `credit_vault` program | Solana devnet | [`EsykPsaf…E4jFXDg`](https://explorer.solana.com/address/EsykPsafhHUeN7jA9DGqBiGuBsTBaFynLDVVpE4jFXDg?cluster=devnet) |
+| Dev USDC mint | Solana devnet | [`EMm5UveN…jFXDg`](https://explorer.solana.com/address/EMm5UveNWJaTfbMcJ8g2w7i2riydKKyZWhauEj8DzRTq?cluster=devnet) |
 | `@agent-fuel/sdk` | npm | [`v0.1.0`](https://www.npmjs.com/package/@agent-fuel/sdk) |
-| Backend (REST + WS + webhook) | Railway | [`api.agentfuel.online`](https://api.agentfuel.online/health/ready) |
+| Backend (REST + WS + webhook + dev airdrop) | Railway | [`api.agentfuel.online`](https://api.agentfuel.online/health/ready) |
+| Flutter mobile (Android) | local APK | Onboarding + vault actions + alerts + activity live |
+| Reference agent runtime | `cargo run -p agent_fuel_runtime` | spend / request-spend / register-service / pyth_logger |
 | Console dashboard | local dev only | 4.W.10 (deploy) deferred |
-| Flutter mobile | not started | 4.M deferred |
 | Mainnet programs | not yet | Phase 5 |
 
 ---
@@ -219,10 +225,90 @@ agent_fuel/
 ## Phase Status
 
 - ✅ **Phase 1** — Reputation program: seven instructions, ERC-8004 metadata, unit + slice tests
-- ✅ **Phase 2** — Credit Vault program: vault + policy + six-check spend ladder + freeze/withdraw/claim
-- ✅ **Phase 3** — Backend: Helius webhook ingest, parser, mirror tables, score engine, SIWS auth, REST + WS, FCM-ready alert dispatcher
-- 🟡 **Phase 4** — Clients: SDK published; web dashboard local; mobile deferred; web deploy deferred until backend hardening shipped (✓ done) and frontend URL stabilises
+- ✅ **Phase 2** — Credit Vault program: vault + policy + six-check spend ladder + freeze/withdraw/claim + request_spend/approve_spend pending-spend pair
+- ✅ **Phase 3** — Backend: Helius webhook ingest, parser, mirror tables, score engine, SIWS auth, REST + WS, FCM-ready alert dispatcher, env-gated `/api/dev/airdrop` mint endpoint
+- 🟡 **Phase 4** — Clients:
+    - ✅ SDK published; reference Rust runtime + Pyth dogfood example shipped
+    - ✅ Mobile (Flutter/Android): MWA wallet connect, SIWS, agent provisioning, vault fund/freeze/withdraw, edit policy, orphan recovery, live vault balance, real-time alerts over JWT-authed WS, in-app dev USDC airdrop button
+    - 🟡 Web dashboard local; deploy deferred until URL stabilises
+    - ⬜ FCM push notifications scaffold
 - ⬜ **Phase 5** — Launch: audit + mainnet + partner agents + docs site
+
+---
+
+## End-to-End Demo Loop
+
+A grant-grade dogfood: a long-running Rust agent pays a registered service every N seconds, your phone shows live activity, and an over-limit request triggers a real push-style approval flow.
+
+### 1. Provision via the mobile app
+
+Install the APK, connect a Solana Mobile / Phantom wallet, create an agent (the in-app sheet handles seed derivation + biometric + on-chain `init_agent` + `init_vault`), fund the vault. If your wallet has no dev USDC, tap the inline **"Get 1,000 devnet USDC"** button on the fund sheet — the backend's env-gated airdrop endpoint mints to your ATA in ~2 seconds.
+
+### 2. Register one or more services from the operator side
+
+```bash
+solana-keygen new --no-bip39-passphrase --silent -o ~/.config/solana/svc-pyth.json
+cargo run -p agent_fuel_runtime -- register-service \
+  --service-key ~/.config/solana/svc-pyth.json \
+  --name "Pyth BTC Feed" \
+  --category data-feed
+
+# Service needs a USDC ATA + a bit of SOL for record_payment receipt rent
+spl-token create-account EMm5UveNWJaTfbMcJ8g2w7i2riydKKyZWhauEj8DzRTq \
+  --owner $(solana-keygen pubkey ~/.config/solana/svc-pyth.json) \
+  --fee-payer ~/.config/solana/id.json --url devnet
+solana transfer $(solana-keygen pubkey ~/.config/solana/svc-pyth.json) 0.5 \
+  --url devnet --allow-unfunded-recipient
+```
+
+### 3. Run the reference agent
+
+```bash
+cargo run -p agent_fuel_runtime --example pyth_logger -- \
+  --agent-key   ~/.config/solana/agent.json \
+  --owner       <YOUR_WALLET_B58> \
+  --service-key ~/.config/solana/svc-pyth.json
+```
+
+Each tick atomically does `credit_vault::spend` + `reputation::record_payment` so vault balance + agent score both accrue. The mobile **Fleet** tab's vault card refreshes live, the **Activity** tab streams each spend, the reputation dial climbs in real time over the JWT-authed WS.
+
+Pass `--service-key` multiple times to round-robin across N services and unlock the reputation diversity factor:
+
+```bash
+cargo run -p agent_fuel_runtime --example pyth_logger -- \
+  --agent-key   ~/.config/solana/agent.json \
+  --owner       <YOUR_WALLET_B58> \
+  --service-key ~/.config/solana/svc-pyth.json \
+  --service-key ~/.config/solana/svc-jupiter.json \
+  --service-key ~/.config/solana/svc-helius.json \
+  --interval-secs 5 --amount-per-tick 0.005
+```
+
+### 4. Trigger the over-limit approval flow
+
+The agent calls `request_spend` instead of `spend` when it knows an amount would exceed policy. The owner sees an Urgent alert on the phone, taps Review, biometric, on-chain `approve_spend` releases the funds.
+
+```bash
+# With a vault on the Balanced preset (per-tx $25), ask for $30
+cargo run -p agent_fuel_runtime -- request-spend \
+  --agent-key ~/.config/solana/agent.json \
+  --owner     <YOUR_WALLET_B58> \
+  --service   <SERVICE_PUBKEY_B58> \
+  --amount    30
+```
+
+Within ~30 seconds (Helius webhook lag), the **Alerts** tab pulses with **"Approval required · 30.00 USDC spend"**. Tap → review sheet shows agent, amount, service → biometric → vault releases. The receipt PDA is closed back to the owner.
+
+### 5. Watch the loop from the dev console
+
+```bash
+# Mobile-side logs only — filterable by our tags
+flutter logs | grep -E 'af\.(ws|fleet|activity)'
+
+# Backend-side — Railway HTTP + Deploy logs
+# /webhooks/helius arrives every ~30-60s with parsed=2 (Spent + PaymentRecorded)
+# Each event broadcasts to channel agent:<pk> over the WS hub
+```
 
 ---
 
