@@ -7,7 +7,7 @@ import '../config/env.dart';
 import '../error/exceptions.dart';
 
 class DioClient {
-  DioClient(this._jwtStore)
+  DioClient(this._jwtStore, {void Function()? onUnauthorized})
       : _dio = Dio(
           BaseOptions(
             baseUrl: AppEnv.apiBase,
@@ -17,7 +17,7 @@ class DioClient {
             responseType: ResponseType.json,
           ),
         ) {
-    _dio.interceptors.add(_AuthInterceptor(_jwtStore));
+    _dio.interceptors.add(_AuthInterceptor(_jwtStore, onUnauthorized));
     _dio.interceptors.add(_ErrorInterceptor());
   }
 
@@ -27,8 +27,9 @@ class DioClient {
 }
 
 class _AuthInterceptor extends Interceptor {
-  _AuthInterceptor(this._store);
+  _AuthInterceptor(this._store, this._onUnauthorized);
   final JwtStore _store;
+  final void Function()? _onUnauthorized;
 
   @override
   Future<void> onRequest(
@@ -51,6 +52,10 @@ class _AuthInterceptor extends Interceptor {
   ) async {
     if (err.response?.statusCode == 401) {
       await _store.clear();
+      // Bounce to onboarding so the user re-signs instead of staring at a
+      // greyed-out fleet screen. Callback is null in tests so the
+      // interceptor stays trivially mockable.
+      _onUnauthorized?.call();
     }
     handler.next(err);
   }

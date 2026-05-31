@@ -29,8 +29,18 @@ final GetIt sl = GetIt.instance;
 Future<void> configureDependencies() async {
   // JwtStore comes first — the Dio auth interceptor reads it on every request.
   sl.registerLazySingleton<JwtStore>(JwtStore.new);
-  sl.registerLazySingleton<DioClient>(() => DioClient(sl<JwtStore>()));
   sl.registerLazySingleton<AppRouter>(AppRouter.new);
+  sl.registerLazySingleton<DioClient>(
+    // On 401 the interceptor clears the JWT and bounces to onboarding so
+    // the user re-signs instead of facing a dead fleet screen. We resolve
+    // the router lazily inside the callback so the AppRouter singleton is
+    // ready by the time the first request fires.
+    () => DioClient(
+      sl<JwtStore>(),
+      onUnauthorized: () =>
+          sl<AppRouter>().replaceAll([const OnboardingRoute()]),
+    ),
+  );
 
   sl.registerLazySingleton<AuthRepository>(
     () => AuthRepository(sl<DioClient>().dio, sl<JwtStore>()),

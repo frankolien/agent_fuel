@@ -6,7 +6,11 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 const NONCE_TTL_SECONDS: i64 = 300;
-const JWT_TTL_SECONDS: i64 = 3600;
+// 30 days — fleet view only; spend transactions still gate on MWA
+// per-tx signature, so a long-lived JWT can't drain funds. Trade-off is
+// a stolen device retains REST/WS read access until expiry, acceptable
+// for a wallet-scoped read API.
+const JWT_TTL_SECONDS: i64 = 60 * 60 * 24 * 30;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
