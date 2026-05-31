@@ -49,3 +49,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+# Launcher icons are legacy only — per-density PNGs copied straight from
+# assets/agent-fuel-icons/icon-{48,72,96,144,192}.png into the matching
+# mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher.png. The brand
+# mark already has its rounded-corner mask baked in, so on adaptive
+# launchers the OS wraps it in its own silhouette — accepted trade-off.
