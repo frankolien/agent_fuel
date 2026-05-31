@@ -345,8 +345,8 @@ async fn spend_requested_alert(
             (owner, agent, vault, service, amount_usdc, reason, \
              pending_spend_pubkey, nonce) \
          VALUES ($1, $2, $3, $4, $5, 'per_tx_exceeded', $6, $7) \
-         ON CONFLICT (pending_spend_pubkey) DO UPDATE \
-         SET owner = EXCLUDED.owner \
+         ON CONFLICT (pending_spend_pubkey) WHERE pending_spend_pubkey IS NOT NULL \
+         DO UPDATE SET owner = EXCLUDED.owner \
          RETURNING id",
     )
     .bind(&owner)
