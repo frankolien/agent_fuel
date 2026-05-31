@@ -18,6 +18,7 @@ export {
 export {
   agentProfilePda,
   agentServiceLinkPda,
+  pendingSpendPda,
   policyPda,
   receiptUsedPda,
   serviceRegistryPda,
@@ -41,6 +42,12 @@ export {
 } from "./errors.js";
 export { recordPayment } from "./record-payment.js";
 export type { RecordPaymentArgs, RecordPaymentResult } from "./record-payment.js";
+export { pay } from "./pay.js";
+export type { PayArgs, PayResult } from "./pay.js";
+export { requestSpend } from "./request-spend.js";
+export type { RequestSpendArgs, RequestSpendResult } from "./request-spend.js";
+export { registerService } from "./register-service.js";
+export type { RegisterServiceArgs, RegisterServiceResult } from "./register-service.js";
 export { subscribeService, subscribeVault } from "./live.js";
 export type { SubscribeOptions } from "./live.js";
 export { paymentRequired, PaymentParseError } from "./x402.js";
@@ -53,6 +60,7 @@ export type {
   CreditVaultAccount,
   LiveEventFrame,
   LiveStatus,
+  PendingSpendAccount,
   Pubkeyish,
   ReputationLookup,
   ServiceCategory,

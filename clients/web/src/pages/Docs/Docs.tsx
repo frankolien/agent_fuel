@@ -19,9 +19,12 @@ const TOC: Section[] = [
   },
   {
     id: "sdk",
-    title: "The six functions",
+    title: "The SDK",
     subs: [
       { id: "fn-spend", title: "spend()" },
+      { id: "fn-pay", title: "pay()" },
+      { id: "fn-request-spend", title: "requestSpend()" },
+      { id: "fn-register-service", title: "registerService()" },
       { id: "fn-get-score", title: "getScore()" },
       { id: "fn-get-vault-balance", title: "getVaultBalance()" },
       { id: "fn-get-policy", title: "getPolicy()" },
@@ -75,7 +78,8 @@ export function Docs() {
               </h1>
               <p className="mt-4 max-w-[640px] text-[15.5px] leading-relaxed text-muted">
                 TypeScript SDK for Agent Fuel — credit vault + reputation primitives for AI agents
-                on Solana. Six functions, one import, on-chain payments via x402.
+                on Solana. Compose vault payments, reputation accrual, service registration, and
+                the over-limit approval flow with one import, on-chain payments via x402.
               </p>
             </header>
 
@@ -284,23 +288,85 @@ const fuel = new AgentFuel({
 function SdkFunctions() {
   return (
     <section>
-      <H2 id="sdk">The six functions</H2>
+      <H2 id="sdk">The SDK</H2>
       <P>
-        The full surface of the SDK is six methods plus one fetch wrapper for x402. Every method
-        throws <Code>AccountNotFoundError</Code> when the target doesn't exist on-chain (or the
-        backend returns 404), and <Code>HttpError</Code> for non-2xx REST responses.
+        Nine methods plus a fetch wrapper for x402. Every method throws{" "}
+        <Code>AccountNotFoundError</Code> when the target doesn't exist on-chain (or the backend
+        returns 404), and <Code>HttpError</Code> for non-2xx REST responses.
       </P>
 
       <H3 id="fn-spend">spend()</H3>
       <P>
-        Pay a service from the agent's vault. The SDK fetches the current vault + policy and applies
-        the same six-check ladder the on-chain program enforces — any failure surfaces as a typed
-        error so callers can branch without parsing strings. The service's USDC associated token
-        account is created on-demand (~0.002 SOL rent, paid by the agent).
+        Pay a service from the agent's vault — vault burn only, no reputation accrual. The SDK
+        fetches the current vault + policy and applies the same six-check ladder the on-chain
+        program enforces — any failure surfaces as a typed error so callers can branch without
+        parsing strings. The service's USDC associated token account is created on-demand
+        (~0.002 SOL rent, paid by the agent).
       </P>
       <Pre>{`const { signature } = await fuel.spend({
   service: serviceAuthorityPubkey,
   amountUsdc: 250_000, // micro-USDC (0.25 USDC)
+});`}</Pre>
+      <Callout kind="note">
+        For typical paying bots, prefer <Code>pay()</Code> below — it keeps the vault burn and the
+        reputation accrual in one atomic transaction so a service can't end up paid without the
+        agent's score moving.
+      </Callout>
+
+      <H3 id="fn-pay">pay()</H3>
+      <P>
+        Atomic <Code>spend</Code> + <Code>record_payment</Code> in one transaction. The agent
+        signs the spend half; the service keypair co-signs the reputation half. Both land or
+        neither does. Use this when you want the vault burn and the reputation accrual
+        all-or-nothing — the standard pattern for a paying agent.
+      </P>
+      <Pre>{`import { createHash } from "node:crypto";
+
+const receiptHash = createHash("sha256")
+  .update(\`\${agent.publicKey}|\${service.publicKey}|\${tick}|\${price}\`)
+  .digest();
+
+const { signature } = await fuel.pay({
+  service: serviceKeypair,            // Keypair, not pubkey — co-signs the tx
+  amountUsdc: 10_000,                  // micro-USDC (0.01 USDC)
+  receiptHash,                          // 32 bytes; must be unique per call
+});`}</Pre>
+      <Callout kind="warn">
+        Receipts are single-use on chain — replaying the same hash hits{" "}
+        <Code>ReceiptAlreadyRecordedError</Code> and the whole tx reverts. Include a monotonic
+        counter or timestamp in the hash so retries don't collide.
+      </Callout>
+
+      <H3 id="fn-request-spend">requestSpend()</H3>
+      <P>
+        Agent-initiated half of the over-limit approval flow. When a trade would exceed your
+        vault's <Code>per_tx_limit_usdc</Code>, call this instead of <Code>spend()</Code> — it
+        enqueues a <Code>PendingSpend</Code> account the owner can later approve from the mobile
+        app or reject. The bot polls the returned PDA to learn the verdict.
+      </P>
+      <Pre>{`const { signature, pendingSpend, nonce } = await fuel.requestSpend({
+  service: serviceAuthorityPubkey,
+  amountUsdc: 30_000_000, // 30 USDC, above policy
+});
+
+// Poll pendingSpend until it closes — account-gone means resolved.
+// Approved → vault.total_spent advanced (CPI'd transfer).
+// Rejected → vault unchanged (account just closed).`}</Pre>
+
+      <H3 id="fn-register-service">registerService()</H3>
+      <P>
+        Register a service on chain so agents can pay against it and accrue reputation. Two
+        signers: the sponsor (pays rent, submits the tx — typically the owner wallet) and the
+        service keypair (long-lived signing identity that co-signs every future{" "}
+        <Code>record_payment</Code>). Idempotent only at the keypair level — re-registering the
+        same key fails because the registry PDA already exists.
+      </P>
+      <Pre>{`const { signature } = await fuel.registerService({
+  sponsor: sponsorKeypair,            // pays rent + tx fee
+  service: serviceKeypair,            // long-lived service identity
+  name: "Pyth BTC/USD",                // <= 32 bytes UTF-8
+  category: "DataFeed",                // DataFeed | Compute | Swap | Rpc | Other
+  serviceUri: "https://hermes.pyth.network/...", // optional, <= 128 bytes
 });`}</Pre>
 
       <H3 id="fn-get-score">getScore()</H3>
@@ -426,6 +492,9 @@ function Errors() {
           ["LifetimeLimitExceededError", "vault.total_spent + amountUsdc > policy.lifetime_limit_usdc"],
           ["OwnerNotConfiguredError", "Method needs an owner but none was configured"],
           ["AccountNotFoundError", "Target account doesn't exist on-chain (or 404 from REST)"],
+          ["ReceiptAlreadyRecordedError", "Receipt hash was already used by recordPayment / pay — replay defence"],
+          ["RecordPaymentError", "Generic record_payment failure (e.g. on-chain counter overflow)"],
+          ["ServiceInactiveError", "Service has been deactivated by its authority"],
           ["HttpError", "Non-2xx REST response from the backend"],
           ["PaymentParseError", "Malformed X-Payment-Required header in an x402 response"],
         ]}

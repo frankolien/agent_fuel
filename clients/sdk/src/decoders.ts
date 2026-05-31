@@ -1,8 +1,14 @@
 import { PublicKey } from "@solana/web3.js";
 import type BN from "bn.js";
-import type { RawCreditVault, RawServiceRegistry, RawSpendPolicy } from "./programs.js";
+import type {
+  RawCreditVault,
+  RawPendingSpend,
+  RawServiceRegistry,
+  RawSpendPolicy,
+} from "./programs.js";
 import type {
   CreditVaultAccount,
+  PendingSpendAccount,
   ServiceCategory,
   ServiceRegistryAccount,
   SpendPolicyAccount,
@@ -47,6 +53,22 @@ export function decodeCreditVault(pubkey: PublicKey, raw: RawCreditVault): Credi
     frozen: raw.frozen,
     created_slot: bnToNum(raw.createdSlot),
     last_active_slot: bnToNum(raw.lastActiveSlot),
+    pending_count: bnToNum(raw.pendingCount),
+  };
+}
+
+export function decodePendingSpend(
+  pubkey: PublicKey,
+  raw: RawPendingSpend,
+): PendingSpendAccount {
+  return {
+    pubkey,
+    vault: raw.vault,
+    agent: raw.agent,
+    service: raw.service,
+    amount_usdc: bnToNum(raw.amountUsdc),
+    nonce: bnToNum(raw.nonce),
+    requested_slot: bnToNum(raw.requestedSlot),
   };
 }
 

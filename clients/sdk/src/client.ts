@@ -23,6 +23,17 @@ import {
 } from "./errors.js";
 import { guardSpend } from "./guardrails.js";
 import { subscribe, wsUrl } from "./live.js";
+import { pay as payStandalone, type PayArgs, type PayResult } from "./pay.js";
+import {
+  requestSpend as requestSpendStandalone,
+  type RequestSpendArgs,
+  type RequestSpendResult,
+} from "./request-spend.js";
+import {
+  registerService as registerServiceStandalone,
+  type RegisterServiceArgs,
+  type RegisterServiceResult,
+} from "./register-service.js";
 import {
   agentProfilePda,
   policyPda,
@@ -200,6 +211,47 @@ export class AgentFuel {
     } catch (err) {
       throw mapSpendError(err, { service, amountUsdc, vault, policy });
     }
+  }
+
+  /// Atomic spend + record_payment in one transaction. Use this instead
+  /// of `spend()` + `recordPayment()` when you want the vault burn and
+  /// the reputation accrual to be all-or-nothing. The service keypair
+  /// co-signs.
+  async pay(
+    args: Omit<PayArgs, "connection" | "agent" | "owner"> & { owner?: Pubkeyish },
+  ): Promise<PayResult> {
+    return payStandalone({
+      agent: this.agent,
+      owner: this.resolveOwner(args.owner),
+      service: args.service,
+      amountUsdc: args.amountUsdc,
+      receiptHash: args.receiptHash,
+      connection: this.connection,
+    });
+  }
+
+  /// Submit an over-limit spend request the owner can approve from the
+  /// mobile app. Returns the `pendingSpend` PDA so the bot can poll for
+  /// resolution.
+  async requestSpend(
+    args: Omit<RequestSpendArgs, "connection" | "agent" | "owner"> & { owner?: Pubkeyish },
+  ): Promise<RequestSpendResult> {
+    return requestSpendStandalone({
+      agent: this.agent,
+      owner: this.resolveOwner(args.owner),
+      service: args.service,
+      amountUsdc: args.amountUsdc,
+      connection: this.connection,
+    });
+  }
+
+  /// Register a service on chain. The `sponsor` (typically `this.agent`'s
+  /// owner wallet) pays rent; the `service` keypair is the long-lived
+  /// identity that will co-sign every future `record_payment`.
+  async registerService(
+    args: Omit<RegisterServiceArgs, "connection">,
+  ): Promise<RegisterServiceResult> {
+    return registerServiceStandalone({ ...args, connection: this.connection });
   }
 
   /// Triggers an on-chain recomputation of the agent's reputation score.

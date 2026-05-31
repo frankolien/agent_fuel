@@ -56,6 +56,21 @@ export function agentServiceLinkPda(
   return pda;
 }
 
+/** PendingSpend PDA — created by `request_spend`, consumed (and closed) by
+ *  either `approve_spend` (CPIs into `spend`, transfers USDC) or
+ *  `cancel_spend` (closes without transfer). Nonce is the vault's
+ *  `pending_count` at request time, so every request gets a fresh PDA. */
+export function pendingSpendPda(vault: Pubkeyish, nonce: number | bigint): PublicKey {
+  const nonceBuf = Buffer.alloc(8);
+  // u64 little-endian — matches Rust `nonce.to_le_bytes()`.
+  nonceBuf.writeBigUInt64LE(typeof nonce === "bigint" ? nonce : BigInt(nonce));
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("pending"), toPubkey(vault).toBuffer(), nonceBuf],
+    PROGRAM_IDS.creditVault,
+  );
+  return pda;
+}
+
 /** Existence-as-signal: a `ReceiptUsed` PDA at `[b"receipt", hash]` proves
  *  the receipt has been recorded. `record_payment`'s `init` constraint (not
  *  `init_if_needed`) means a duplicate hash fails with `AccountAlreadyInUse`,

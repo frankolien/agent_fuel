@@ -22,6 +22,16 @@ export type RawCreditVault = {
   frozen: boolean;
   createdSlot: BN;
   lastActiveSlot: BN;
+  pendingCount: BN;
+};
+
+export type RawPendingSpend = {
+  vault: PublicKey;
+  agent: PublicKey;
+  service: PublicKey;
+  amountUsdc: BN;
+  nonce: BN;
+  requestedSlot: BN;
 };
 
 export type RawSpendPolicy = {
@@ -77,13 +87,65 @@ type SpendBuilder = {
   };
 };
 
+export type RequestSpendAccounts = {
+  agent: PublicKey;
+  vault: PublicKey;
+  serviceTokenAccount: PublicKey;
+  pendingSpend: PublicKey;
+  systemProgram: PublicKey;
+};
+
+type RequestSpendBuilder = {
+  accounts(accounts: RequestSpendAccounts): {
+    signers(signers: readonly Keypair[]): {
+      rpc(opts?: ConfirmOptions): Promise<string>;
+    };
+  };
+};
+
+export type ApproveSpendAccounts = {
+  owner: PublicKey;
+  vault: PublicKey;
+  policy: PublicKey;
+  pendingSpend: PublicKey;
+  vaultTokenAccount: PublicKey;
+  serviceTokenAccount: PublicKey;
+  tokenProgram: PublicKey;
+};
+
+type ApproveSpendBuilder = {
+  accounts(accounts: ApproveSpendAccounts): {
+    signers(signers: readonly Keypair[]): {
+      rpc(opts?: ConfirmOptions): Promise<string>;
+    };
+  };
+};
+
+export type CancelSpendAccounts = {
+  owner: PublicKey;
+  vault: PublicKey;
+  pendingSpend: PublicKey;
+};
+
+type CancelSpendBuilder = {
+  accounts(accounts: CancelSpendAccounts): {
+    signers(signers: readonly Keypair[]): {
+      rpc(opts?: ConfirmOptions): Promise<string>;
+    };
+  };
+};
+
 export type CreditVaultProgram = {
   account: {
     creditVault: Fetchable<RawCreditVault>;
     spendPolicy: Fetchable<RawSpendPolicy>;
+    pendingSpend: Fetchable<RawPendingSpend>;
   };
   methods: {
     spend(amountUsdc: BN): SpendBuilder;
+    requestSpend(amountUsdc: BN): RequestSpendBuilder;
+    approveSpend(): ApproveSpendBuilder;
+    cancelSpend(): CancelSpendBuilder;
   };
 };
 
@@ -117,6 +179,30 @@ type RecordPaymentBuilder = {
   };
 };
 
+export type RegisterServiceAccounts = {
+  sponsor: PublicKey;
+  service: PublicKey;
+  serviceRegistry: PublicKey;
+  systemProgram: PublicKey;
+};
+
+type RegisterServiceBuilder = {
+  accounts(accounts: RegisterServiceAccounts): {
+    signers(signers: readonly Keypair[]): {
+      rpc(opts?: ConfirmOptions): Promise<string>;
+    };
+  };
+};
+
+// Anchor's IDL serializes Rust enum variants as objects with a snake_case
+// field set to an empty struct. The TS client expects the same shape.
+export type ServiceCategoryArg =
+  | { dataFeed: Record<string, never> }
+  | { compute: Record<string, never> }
+  | { swap: Record<string, never> }
+  | { rpc: Record<string, never> }
+  | { other: Record<string, never> };
+
 export type ReputationProgram = {
   account: {
     serviceRegistry: Fetchable<RawServiceRegistry>;
@@ -127,6 +213,11 @@ export type ReputationProgram = {
       amountUsdc: BN,
       paymentReceiptHash: number[] | Uint8Array,
     ): RecordPaymentBuilder;
+    registerService(
+      name: number[] | Uint8Array,
+      category: ServiceCategoryArg,
+      serviceUri: number[] | Uint8Array,
+    ): RegisterServiceBuilder;
   };
 };
 

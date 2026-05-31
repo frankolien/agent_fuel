@@ -2,6 +2,22 @@
 
 All notable changes to `@agent-fuel/sdk` are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-05-31
+
+### Added
+
+- `pay({ agent, service, owner, amountUsdc, receiptHash, connection })` — atomic `spend` + `record_payment` in one tx, mirroring `Spender::pay()` in the Rust runtime. Vault burn and reputation accrual now land together or not at all; no half-states where USDC moved but the agent ↔ service link never updated.
+- `requestSpend({ agent, owner, service, amountUsdc, connection })` — agent-initiated half of the over-limit approval flow. Returns the `pendingSpend` PDA so callers can poll for resolution.
+- `registerService({ sponsor, service, name, category, serviceUri?, connection })` — register a new service on chain. Two-signer (sponsor pays rent, service is the long-lived identity).
+- `pendingSpendPda(vault, nonce)` PDA helper.
+- `PendingSpendAccount` type + decoder.
+- Convenience wrappers on `AgentFuel`: `fuel.pay()`, `fuel.requestSpend()`, `fuel.registerService()` — same surface as the standalone functions, with the connection and agent supplied by the instance.
+
+### Changed
+
+- Re-vendored IDLs against the latest on-chain deploys so the SDK sees `request_spend`, `approve_spend`, `cancel_spend`, `register_service`, and the new `pending_count` field on `CreditVault`.
+- `CreditVaultAccount` now includes `pending_count: number` — the nonce burned by the next `request_spend`.
+
 ## [0.1.1] — 2026-05-29
 
 ### Changed

@@ -18,6 +18,20 @@ export type CreditVaultAccount = {
   frozen: boolean;
   created_slot: number;
   last_active_slot: number;
+  // Monotonic nonce for the next `request_spend` — every over-limit request
+  // takes this value, then bumps it. Lets callers derive the PendingSpend
+  // PDA without an extra round-trip.
+  pending_count: number;
+};
+
+export type PendingSpendAccount = {
+  pubkey: PublicKey;
+  vault: PublicKey;
+  agent: PublicKey;
+  service: PublicKey;
+  amount_usdc: number;
+  nonce: number;
+  requested_slot: number;
 };
 
 export type SpendPolicyAccount = {

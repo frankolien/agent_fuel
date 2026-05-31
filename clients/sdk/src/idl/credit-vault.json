@@ -9,6 +9,200 @@
   },
   "instructions": [
     {
+      "name": "approve_spend",
+      "discriminator": [
+        248,
+        201,
+        151,
+        15,
+        28,
+        162,
+        112,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "vault.agent",
+                "account": "CreditVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending_spend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "pending_spend.nonce",
+                "account": "PendingSpend"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_token_account",
+          "writable": true
+        },
+        {
+          "name": "service_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_spend",
+      "discriminator": [
+        122,
+        254,
+        101,
+        132,
+        241,
+        232,
+        205,
+        179
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "vault.agent",
+                "account": "CreditVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending_spend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "pending_spend.nonce",
+                "account": "PendingSpend"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claim",
       "discriminator": [
         62,
@@ -415,6 +609,104 @@
       "args": []
     },
     {
+      "name": "request_spend",
+      "discriminator": [
+        127,
+        12,
+        23,
+        75,
+        137,
+        178,
+        148,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "agent",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "CreditVault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.agent",
+                "account": "CreditVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "service_token_account",
+          "docs": [
+            "The recipient token account. We only need it for its `owner` field",
+            "(the service pubkey we record in PendingSpend); mint constraint is",
+            "belt-and-suspenders since `approve_spend` re-checks both."
+          ]
+        },
+        {
+          "name": "pending_spend",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.pending_count",
+                "account": "CreditVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_usdc",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "spend",
       "discriminator": [
         242,
@@ -740,6 +1032,19 @@
       ]
     },
     {
+      "name": "PendingSpend",
+      "discriminator": [
+        193,
+        205,
+        85,
+        66,
+        25,
+        3,
+        67,
+        134
+      ]
+    },
+    {
       "name": "SpendPolicy",
       "discriminator": [
         139,
@@ -791,6 +1096,32 @@
         236,
         245,
         161
+      ]
+    },
+    {
+      "name": "SpendRejected",
+      "discriminator": [
+        22,
+        233,
+        208,
+        109,
+        202,
+        231,
+        175,
+        22
+      ]
+    },
+    {
+      "name": "SpendRequested",
+      "discriminator": [
+        144,
+        207,
+        254,
+        247,
+        81,
+        146,
+        84,
+        87
       ]
     },
     {
@@ -909,6 +1240,16 @@
       "code": 6009,
       "name": "PostPayDisabled",
       "msg": "Post-pay claims are disabled for this vault"
+    },
+    {
+      "code": 6010,
+      "name": "PendingSpendVaultMismatch",
+      "msg": "Pending spend belongs to a different vault"
+    },
+    {
+      "code": 6011,
+      "name": "PendingNonceOverflow",
+      "msg": "Pending spend counter would overflow"
     }
   ],
   "types": [
@@ -998,11 +1339,21 @@
             "type": "u8"
           },
           {
+            "name": "pending_count",
+            "docs": [
+              "Monotonic counter used as a PDA seed for PendingSpend accounts so",
+              "every approval request gets a unique deterministic address.",
+              "Borrowed 8 bytes from the original 64-byte padding so the account",
+              "size stays at `ACCOUNT_SIZE` and existing vaults need no migration."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "_padding",
             "type": {
               "array": [
                 "u8",
-                64
+                56
               ]
             }
           }
@@ -1033,6 +1384,65 @@
           {
             "name": "slot",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingSpend",
+      "docs": [
+        "A spend request that exceeded one of the policy's rate limits. The agent",
+        "creates this account by calling `request_spend`; the owner reviews from",
+        "the mobile Alerts tab and either calls `approve_spend` (PDA-signed CPI",
+        "transfer, account closed) or `cancel_spend` (account closed, no transfer).",
+        "",
+        "Seeded by `[\"pending\", vault, nonce_le]` where `nonce` is the value of",
+        "`vault.pending_count` at request time, so each request has a unique",
+        "deterministic address that both the agent and the owner can derive."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "service",
+            "docs": [
+              "Owner of the destination token account (mirrors how `Spent` records",
+              "service: `service_token_account.owner`)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_usdc",
+            "type": "u64"
+          },
+          {
+            "name": "requested_slot",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                31
+              ]
+            }
           }
         ]
       }
@@ -1136,6 +1546,70 @@
                 64
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SpendRejected",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_spend",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SpendRequested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "service",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_spend",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_usdc",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
           }
         ]
       }
