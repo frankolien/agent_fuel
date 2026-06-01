@@ -15,28 +15,38 @@ const FEED: ReadonlyArray<FeedEntry> = [
 export function Hero() {
   return (
     <section className="relative mx-auto mt-2 max-w-[var(--container-shell)] px-[var(--pad)]">
-      <div className="relative grid min-h-[600px] grid-cols-1 items-center gap-[clamp(24px,4vw,56px)] overflow-hidden px-7 py-12 md:grid-cols-[1fr_1.15fr] md:px-[clamp(32px,5vw,80px)] md:py-[clamp(48px,7vw,96px)]">
+      <div className="relative grid min-h-[600px] grid-cols-1 items-center gap-[clamp(24px,4vw,56px)] overflow-hidden px-0 py-10 md:grid-cols-[1fr_1.15fr] md:px-[clamp(32px,5vw,80px)] md:py-[clamp(48px,7vw,96px)]">
         <div className="min-w-0">
-          <div className="mb-7 inline-flex items-center gap-2.5 font-mono text-[11.5px] tracking-[0.18em] text-mint-soft uppercase before:block before:h-1.5 before:w-1.5 before:rounded-full before:bg-mint before:[box-shadow:0_0_12px_var(--color-mint-glow)] before:content-['']">
+          <div className="mb-6 inline-flex items-center gap-2.5 font-mono text-[11.5px] tracking-[0.18em] text-mint-soft uppercase before:block before:h-1.5 before:w-1.5 before:rounded-full before:bg-mint before:[box-shadow:0_0_12px_var(--color-mint-glow)] before:content-['']">
             x402-native · built on Solana
           </div>
-          <h1 className="m-0 mb-7 text-[clamp(48px,5.6vw,92px)] leading-[1.02] font-medium tracking-[-0.035em] text-balance text-fg">
+          <h1 className="m-0 mb-6 text-[clamp(36px,8vw,92px)] leading-[1.05] font-medium tracking-[-0.035em] text-balance text-fg md:mb-7 md:leading-[1.02]">
             Credit and reputation for{" "}
             <em className="text-glow-mint-xl text-mint not-italic">autonomous AI&nbsp;agents</em>.
           </h1>
-          <p className="m-0 mb-9 max-w-[480px] text-[17px] leading-[1.55] text-muted">
+          <p className="m-0 mb-8 max-w-[480px] text-[15.5px] leading-[1.55] text-muted md:mb-9 md:text-[17px]">
             Agent Fuel is the on-chain credit and reputation layer for the x402 agentic economy.
             Fund agent vaults with USDC, set granular spending policies, and let trusted agents
             transact on credit.
           </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <Pill to="/console" variant="solid" size="lg">
+          <div className="flex flex-wrap items-center gap-2.5 md:gap-3">
+            <Pill
+              to="/console"
+              variant="solid"
+              size="md"
+              className="md:h-12 md:px-[26px] md:text-[15.5px]"
+            >
               Launch app
             </Pill>
-            <Pill href="#sdk" size="lg">
+            <Pill href="#sdk" size="md" className="md:h-12 md:px-[26px] md:text-[15.5px]">
               Read the docs <span className="font-mono">↗</span>
             </Pill>
-            <Pill href="#how" variant="glow" size="lg">
+            <Pill
+              href="#how"
+              variant="glow"
+              size="md"
+              className="md:h-12 md:px-[26px] md:text-[15.5px]"
+            >
               How it works
             </Pill>
           </div>
@@ -67,12 +77,11 @@ function ReputationViz({ feed }: { feed: ReadonlyArray<FeedEntry> }) {
           </span>
         </div>
 
-        <div className="relative mx-auto mt-1 h-[220px] w-[220px] max-md:h-[170px] max-md:w-[180px]">
+        <div className="relative mx-auto mt-1 aspect-square w-[220px] max-md:w-[180px]">
           <svg
-            className="absolute inset-0 block"
+            className="absolute inset-0 block h-full w-full"
             viewBox="0 0 220 220"
-            width="220"
-            height="220"
+            preserveAspectRatio="xMidYMid meet"
           >
             <path
               d="M 32 158 A 90 90 0 1 1 188 158"
