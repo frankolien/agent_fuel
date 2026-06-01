@@ -30,7 +30,10 @@ export function Nav() {
           {LINKS.map((link) => renderLink(link, "opacity-85 hover:text-fg hover:opacity-100"))}
         </div>
         <div className="flex items-center gap-2">
-          <Pill to="/docs" size="sm" className="hidden sm:inline-flex">
+          {/* Hide until the design's single desktop breakpoint (md=960px in
+              this project) — at tablet widths the brand + this pill + the
+              Launch App pill + hamburger pushed past the viewport edge. */}
+          <Pill to="/docs" size="sm" className="hidden md:inline-flex">
             Read the docs
           </Pill>
           <Pill to="/console" variant="solid" size="sm">
