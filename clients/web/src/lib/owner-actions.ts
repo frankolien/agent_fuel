@@ -23,12 +23,12 @@ import {
   type TransactionInstruction,
   type TransactionSignature,
 } from "@solana/web3.js";
-// The SDK's published browser bundle pulls in anchor's NodeWallet at the top
-// level, which doesn't exist in the browser anchor bundle. Until the SDK is
-// republished without that import, the web client reads the IDL JSON directly
-// and inlines the PDA helpers it needs.
-import creditVaultIdl from "../../../sdk/src/idl/credit-vault.json";
-import reputationIdl from "../../../sdk/src/idl/reputation.json";
+// IDLs come from the SDK's dedicated subpath exports rather than the main
+// entry — the main entry transitively loads NodeWallet at module-init time,
+// which doesn't exist in the browser anchor bundle. The /idl/* exports are
+// pure JSON re-exports with none of that.
+import creditVaultIdl from "@agent-fuel/sdk/idl/credit-vault";
+import reputationIdl from "@agent-fuel/sdk/idl/reputation";
 import type { Agent, Service, Vault } from "@/types/api";
 
 const CREDIT_VAULT_PROGRAM_ID = new PublicKey(creditVaultIdl.address);
