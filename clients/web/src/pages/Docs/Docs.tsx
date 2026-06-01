@@ -10,6 +10,15 @@ type Section = { id: string; title: string; subs: Sub[] };
 const TOC: Section[] = [
   { id: "install", title: "Install", subs: [] },
   {
+    id: "cli",
+    title: "CLI",
+    subs: [
+      { id: "cli-reads", title: "Read commands" },
+      { id: "cli-actions", title: "Action commands" },
+      { id: "cli-dev", title: "Dev helpers" },
+    ],
+  },
+  {
     id: "quick-start",
     title: "Quick start",
     subs: [
@@ -77,13 +86,15 @@ export function Docs() {
                 Docs
               </h1>
               <p className="mt-4 max-w-[640px] text-[15.5px] leading-relaxed text-muted">
-                TypeScript SDK for Agent Fuel — credit vault + reputation primitives for AI agents
-                on Solana. Compose vault payments, reputation accrual, service registration, and
-                the over-limit approval flow with one import, on-chain payments via x402.
+                TypeScript SDK and CLI for Agent Fuel — credit vault + reputation primitives for AI
+                agents on Solana. Compose vault payments, reputation accrual, service registration,
+                and the over-limit approval flow with one import, or inspect any vault from the
+                terminal with one <Code>npx</Code> command. On-chain payments via x402.
               </p>
             </header>
 
             <Install />
+            <CliBin />
             <QuickStart />
             <SdkFunctions />
             <X402 />
@@ -243,6 +254,95 @@ function Install() {
         the SDK share the same RPC client.
       </P>
       <Pre lang="bash">{`npm install @agent-fuel/sdk @solana/web3.js @coral-xyz/anchor`}</Pre>
+    </section>
+  );
+}
+
+function CliBin() {
+  return (
+    <section>
+      <H2 id="cli">CLI</H2>
+      <P>
+        Installing the package also installs an <Code>agent-fuel</Code> binary. Read commands need
+        no setup at all — anyone can inspect a vault from the terminal in one line:
+      </P>
+      <Pre lang="bash">{`npx @agent-fuel/sdk vault <owner-pubkey> <agent-pubkey>`}</Pre>
+      <P>
+        Three command surfaces: read commands (no key), action commands (require a keypair file),
+        and dev helpers. All commands accept <Code>--json</Code> for machine-readable output you
+        can pipe into <Code>jq</Code>.
+      </P>
+
+      <H3 id="cli-reads">Read commands</H3>
+      <P>
+        Public on-chain / REST reads. No keypair needed, no install. Each command takes pubkeys
+        positionally and prints a human-readable summary by default.
+      </P>
+      <Pre lang="bash">{`agent-fuel score   <agent-pubkey>
+agent-fuel vault   <owner-pubkey> <agent-pubkey>
+agent-fuel policy  <owner-pubkey> <agent-pubkey>
+agent-fuel service <service-authority-pubkey>`}</Pre>
+      <P>
+        Not-found errors name the resource and quote the inputs that produced the lookup, so you
+        never see a raw PDA without context. Example:
+      </P>
+      <Pre lang="bash">{`$ agent-fuel vault Cowi… 5ro8…
+agent-fuel: no vault found at <PDA> for owner=Cowi… agent=5ro8… — has init_vault been called for this pair?`}</Pre>
+
+      <H3 id="cli-actions">Action commands</H3>
+      <P>
+        Action commands take one or more <Code>solana-keygen</Code>-style JSON keypair files (the
+        64-byte secret-key array format <Code>solana-keygen new --outfile</Code> writes). Three
+        actions mirror the SDK methods:
+      </P>
+      <Pre lang="bash">{`# Atomic spend + record_payment + compute_score in one tx.
+agent-fuel pay \\
+  --keypair         ~/.config/solana/agent.json \\
+  --service-keypair ~/.config/solana/svc-pyth.json \\
+  --owner           <owner-pubkey> \\
+  --amount          0.005
+
+# Over-limit spend request — owner approves from the mobile app.
+agent-fuel request-spend \\
+  --keypair ~/.config/solana/agent.json \\
+  --owner   <owner-pubkey> \\
+  --service <service-pubkey> \\
+  --amount  30
+
+# Register a new service on chain (two-signer).
+agent-fuel register-service \\
+  --sponsor         ~/.config/solana/id.json \\
+  --service-keypair ~/.config/solana/svc-pyth.json \\
+  --name            "Pyth BTC Feed" \\
+  --category        DataFeed`}</Pre>
+      <Callout kind="note">
+        <Code>pay</Code> bundles <Code>compute_score</Code> in the same atomic tx, so the agent's
+        on-chain reputation score moves with every payment. No extra signer, no extra fee, no
+        race window where the spend lands but the score-update tx is lost.
+      </Callout>
+
+      <H3 id="cli-dev">Dev helpers + global flags</H3>
+      <P>
+        <Code>keygen</Code> generates a fresh keypair. The secret-key JSON goes to <Code>stderr</Code> and
+        the pubkey to <Code>stdout</Code>, so you choose what to redirect — or pass <Code>--out path</Code> to
+        write the keypair to a file directly.
+      </P>
+      <Pre lang="bash">{`agent-fuel keygen --out ~/.config/solana/svc-new.json
+# wrote keypair to /Users/you/.config/solana/svc-new.json
+#   pubkey 5ro8Tb16gD8P7D975ZwMfUvABZvkqyLCF6wySvpTntZj`}</Pre>
+      <P>Every command accepts the same global flags:</P>
+      <Table
+        rows={[
+          ["--cluster <name>", "mainnet-beta | devnet | testnet | localnet (default: devnet)"],
+          ["--rpc <url>", "override the default RPC URL for the chosen cluster"],
+          [
+            "--api-base <url>",
+            "Agent Fuel backend base URL for read commands (default: https://api.agentfuel.online)",
+          ],
+          ["--json", "emit machine-readable JSON instead of human text"],
+          ["--version / --help", "self-explanatory; --help works per-command too"],
+        ]}
+      />
     </section>
   );
 }
