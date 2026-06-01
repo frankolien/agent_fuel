@@ -46,6 +46,10 @@
   body {
     background: var(--color-bg);
     color: var(--color-fg);
+    /* Hero halos use inset: -10% to bleed glow past their parents; without
+       this clamp the document grew wider than the viewport on mobile and
+       scrolled horizontally by ~60-70px. */
+    overflow-x: hidden;
   }
   body {
     font-family: var(--font-sans);
