@@ -1,0 +1,1617 @@
+{
+  "address": "4GjB4xdm1VTPVM6KSiEEfJpD4u7BfY1qDx77StiFShvQ",
+  "metadata": {
+    "name": "reputation",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Agent Fuel — On-chain reputation primitive for AI agents on Solana",
+    "repository": "https://github.com/TODO/agent_fuel"
+  },
+  "instructions": [
+    {
+      "name": "append_response",
+      "discriminator": [
+        162,
+        210,
+        186,
+        50,
+        180,
+        4,
+        47,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "responder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "agent_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "agent_profile.authority",
+                "account": "AgentProfile"
+              }
+            ]
+          },
+          "relations": [
+            "feedback_record"
+          ]
+        },
+        {
+          "name": "feedback_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  100,
+                  98,
+                  97,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "payment_receipt_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "payment_receipt_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "response_uri",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "response_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "compute_score",
+      "discriminator": [
+        161,
+        101,
+        4,
+        93,
+        120,
+        62,
+        41,
+        20
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "agent_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "agent_profile.authority",
+                "account": "AgentProfile"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "give_feedback",
+      "discriminator": [
+        145,
+        136,
+        123,
+        3,
+        215,
+        165,
+        98,
+        41
+      ],
+      "accounts": [
+        {
+          "name": "service",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "agent_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "agent_profile.authority",
+                "account": "AgentProfile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "service_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  114,
+                  118,
+                  105,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "service"
+              }
+            ]
+          }
+        },
+        {
+          "name": "agent_service_link",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  110,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "agent_profile"
+              },
+              {
+                "kind": "account",
+                "path": "service_registry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "receipt_used",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  101,
+                  105,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "payment_receipt_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "feedback_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  100,
+                  98,
+                  97,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "payment_receipt_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "payment_receipt_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "value",
+          "type": "i8"
+        },
+        {
+          "name": "tags",
+          "type": "u32"
+        },
+        {
+          "name": "evidence_uri",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "evidence_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_agent",
+      "discriminator": [
+        212,
+        81,
+        156,
+        211,
+        212,
+        110,
+        21,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "agent",
+          "signer": true
+        },
+        {
+          "name": "agent_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "agent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "agent_uri",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        },
+        {
+          "name": "external_agent_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "record_payment",
+      "discriminator": [
+        226,
+        154,
+        10,
+        27,
+        9,
+        14,
+        148,
+        137
+      ],
+      "accounts": [
+        {
+          "name": "service",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "agent_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "agent_profile.authority",
+                "account": "AgentProfile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "service_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  114,
+                  118,
+                  105,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "service"
+              }
+            ]
+          }
+        },
+        {
+          "name": "agent_service_link",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  110,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "agent_profile"
+              },
+              {
+                "kind": "account",
+                "path": "service_registry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "receipt_used",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  101,
+                  105,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "payment_receipt_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_usdc",
+          "type": "u64"
+        },
+        {
+          "name": "payment_receipt_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "register_service",
+      "discriminator": [
+        11,
+        133,
+        158,
+        232,
+        193,
+        19,
+        229,
+        73
+      ],
+      "accounts": [
+        {
+          "name": "sponsor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "service",
+          "signer": true
+        },
+        {
+          "name": "service_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  114,
+                  118,
+                  105,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "service"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "category",
+          "type": {
+            "defined": {
+              "name": "ServiceCategory"
+            }
+          }
+        },
+        {
+          "name": "service_uri",
+          "type": {
+            "array": [
+              "u8",
+              128
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "revoke_feedback",
+      "discriminator": [
+        211,
+        37,
+        230,
+        82,
+        118,
+        216,
+        137,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "service",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "agent_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "agent_profile.authority",
+                "account": "AgentProfile"
+              }
+            ]
+          },
+          "relations": [
+            "feedback_record"
+          ]
+        },
+        {
+          "name": "service_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  114,
+                  118,
+                  105,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "service"
+              }
+            ]
+          },
+          "relations": [
+            "feedback_record"
+          ]
+        },
+        {
+          "name": "feedback_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  100,
+                  98,
+                  97,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "payment_receipt_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "payment_receipt_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_service_active",
+      "discriminator": [
+        221,
+        172,
+        149,
+        49,
+        212,
+        184,
+        77,
+        101
+      ],
+      "accounts": [
+        {
+          "name": "service",
+          "signer": true
+        },
+        {
+          "name": "service_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  114,
+                  118,
+                  105,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "service"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "relations": [
+            "service_registry"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "active",
+          "type": "bool"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AgentProfile",
+      "discriminator": [
+        60,
+        227,
+        42,
+        24,
+        0,
+        87,
+        86,
+        205
+      ]
+    },
+    {
+      "name": "AgentServiceLink",
+      "discriminator": [
+        123,
+        74,
+        215,
+        240,
+        42,
+        88,
+        217,
+        216
+      ]
+    },
+    {
+      "name": "FeedbackRecord",
+      "discriminator": [
+        15,
+        45,
+        246,
+        217,
+        63,
+        251,
+        69,
+        100
+      ]
+    },
+    {
+      "name": "ReceiptUsed",
+      "discriminator": [
+        143,
+        21,
+        251,
+        75,
+        166,
+        7,
+        163,
+        137
+      ]
+    },
+    {
+      "name": "ServiceRegistry",
+      "discriminator": [
+        105,
+        133,
+        96,
+        79,
+        207,
+        176,
+        202,
+        71
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AgentInitialized",
+      "discriminator": [
+        124,
+        252,
+        85,
+        27,
+        146,
+        101,
+        64,
+        160
+      ]
+    },
+    {
+      "name": "FeedbackGiven",
+      "discriminator": [
+        64,
+        65,
+        2,
+        152,
+        174,
+        215,
+        156,
+        194
+      ]
+    },
+    {
+      "name": "FeedbackRevoked",
+      "discriminator": [
+        205,
+        16,
+        31,
+        94,
+        54,
+        101,
+        16,
+        199
+      ]
+    },
+    {
+      "name": "PaymentRecorded",
+      "discriminator": [
+        214,
+        3,
+        212,
+        116,
+        135,
+        35,
+        104,
+        98
+      ]
+    },
+    {
+      "name": "ResponseAppended",
+      "discriminator": [
+        168,
+        169,
+        214,
+        193,
+        171,
+        1,
+        232,
+        123
+      ]
+    },
+    {
+      "name": "ScoreComputed",
+      "discriminator": [
+        52,
+        76,
+        80,
+        33,
+        2,
+        43,
+        75,
+        109
+      ]
+    },
+    {
+      "name": "ServiceActiveSet",
+      "discriminator": [
+        151,
+        122,
+        7,
+        40,
+        191,
+        139,
+        237,
+        52
+      ]
+    },
+    {
+      "name": "ServiceRegistered",
+      "discriminator": [
+        25,
+        219,
+        76,
+        223,
+        57,
+        191,
+        117,
+        38
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Overflow",
+      "msg": "Counter or amount overflow"
+    },
+    {
+      "code": 6001,
+      "name": "ServiceInactive",
+      "msg": "Service is not active"
+    },
+    {
+      "code": 6002,
+      "name": "ZeroAmount",
+      "msg": "Payment amount must be greater than zero"
+    },
+    {
+      "code": 6003,
+      "name": "SelfRating",
+      "msg": "A service may not rate itself or the agent owner"
+    },
+    {
+      "code": 6004,
+      "name": "ReceiptMismatch",
+      "msg": "Receipt does not belong to this (agent, service) pair"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidFeedbackValue",
+      "msg": "Feedback value is outside the allowed range"
+    },
+    {
+      "code": 6006,
+      "name": "UnauthorizedResponder",
+      "msg": "Responder must be the agent or its owner"
+    },
+    {
+      "code": 6007,
+      "name": "AlreadyHasResponse",
+      "msg": "Feedback already has a response"
+    },
+    {
+      "code": 6008,
+      "name": "AlreadyRevoked",
+      "msg": "Feedback has already been revoked"
+    },
+    {
+      "code": 6009,
+      "name": "FeedbackRateLimited",
+      "msg": "Feedback rate limit not yet expired for this (service, agent) pair"
+    },
+    {
+      "code": 6010,
+      "name": "UnauthorizedService",
+      "msg": "Only the service authority may perform this action"
+    }
+  ],
+  "types": [
+    {
+      "name": "AgentInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "init_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AgentProfile",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent_uri",
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "external_agent_id",
+            "type": "u64"
+          },
+          {
+            "name": "total_transactions",
+            "type": "u64"
+          },
+          {
+            "name": "total_volume_usdc",
+            "type": "u64"
+          },
+          {
+            "name": "consecutive_success",
+            "type": "u32"
+          },
+          {
+            "name": "total_feedback_count",
+            "type": "u32"
+          },
+          {
+            "name": "active_negative_feedback_count",
+            "type": "u32"
+          },
+          {
+            "name": "services_used",
+            "type": "u16"
+          },
+          {
+            "name": "first_active_slot",
+            "type": "u64"
+          },
+          {
+            "name": "last_active_slot",
+            "type": "u64"
+          },
+          {
+            "name": "reputation_score",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "AgentServiceLink",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "service",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_transactions",
+            "type": "u64"
+          },
+          {
+            "name": "total_volume_usdc",
+            "type": "u64"
+          },
+          {
+            "name": "first_payment_slot",
+            "type": "u64"
+          },
+          {
+            "name": "last_payment_slot",
+            "type": "u64"
+          },
+          {
+            "name": "last_feedback_slot",
+            "type": "u64"
+          },
+          {
+            "name": "has_received_feedback",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeedbackGiven",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "service",
+            "type": "pubkey"
+          },
+          {
+            "name": "feedback",
+            "type": "pubkey"
+          },
+          {
+            "name": "payment_receipt_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "value",
+            "type": "i8"
+          },
+          {
+            "name": "tags",
+            "type": "u32"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeedbackRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent_profile",
+            "type": "pubkey"
+          },
+          {
+            "name": "service_registry",
+            "type": "pubkey"
+          },
+          {
+            "name": "payment_receipt_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "value",
+            "type": "i8"
+          },
+          {
+            "name": "tags",
+            "type": "u32"
+          },
+          {
+            "name": "evidence_uri",
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "evidence_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "response_uri",
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "response_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "has_response",
+            "type": "bool"
+          },
+          {
+            "name": "revoked",
+            "type": "bool"
+          },
+          {
+            "name": "created_slot",
+            "type": "u64"
+          },
+          {
+            "name": "last_modified_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeedbackRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "service",
+            "type": "pubkey"
+          },
+          {
+            "name": "feedback",
+            "type": "pubkey"
+          },
+          {
+            "name": "was_negative",
+            "type": "bool"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PaymentRecorded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "service",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_usdc",
+            "type": "u64"
+          },
+          {
+            "name": "payment_receipt_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "was_new_pair",
+            "type": "bool"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReceiptUsed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "receipt_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "agent_service_link",
+            "type": "pubkey"
+          },
+          {
+            "name": "recorded_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ResponseAppended",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "feedback",
+            "type": "pubkey"
+          },
+          {
+            "name": "responder",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScoreComputed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "score",
+            "type": "u16"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ServiceActiveSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "service",
+            "type": "pubkey"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ServiceCategory",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "DataFeed"
+          },
+          {
+            "name": "Compute"
+          },
+          {
+            "name": "Swap"
+          },
+          {
+            "name": "Rpc"
+          },
+          {
+            "name": "Other"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ServiceRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "service",
+            "type": "pubkey"
+          },
+          {
+            "name": "sponsor",
+            "docs": [
+              "Wallet that paid rent. Lets us answer \"who registered this service?\"",
+              "without an extra column on the on-chain account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "type": {
+              "defined": {
+                "name": "ServiceCategory"
+              }
+            }
+          },
+          {
+            "name": "init_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ServiceRegistry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "service_uri",
+            "docs": [
+              "Off-chain metadata URI (pricing, docs, endpoint, logo). Padded to 128 bytes;",
+              "trailing NULs are trimmed when read. Mirrors `AgentProfile::agent_uri`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "type": {
+              "defined": {
+                "name": "ServiceCategory"
+              }
+            }
+          },
+          {
+            "name": "total_agents_served",
+            "type": "u64"
+          },
+          {
+            "name": "total_volume_received_usdc",
+            "type": "u64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "first_active_slot",
+            "type": "u64"
+          },
+          {
+            "name": "last_active_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
