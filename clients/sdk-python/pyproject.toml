@@ -1,6 +1,6 @@
 [project]
 name = "agent-fuel-sdk"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python SDK for Agent Fuel — credit vault + reputation primitives for AI agents on Solana."
 readme = "README.md"
 license = { text = "Apache-2.0" }

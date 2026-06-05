@@ -10,6 +10,7 @@ from solders.rpc.responses import GetAccountInfoResp
 
 from .constants import CREDIT_VAULT_PROGRAM_ID, REPUTATION_PROGRAM_ID
 from .errors import AccountNotFoundError, HttpError, OwnerNotConfiguredError
+from .pay import PayResult, pay as _pay_standalone
 from .pda import (
     Pubkeyish,
     policy_pda,
@@ -17,9 +18,18 @@ from .pda import (
     to_pubkey,
     vault_pda,
 )
+from .register_service import (
+    RegisterServiceResult,
+    register_service as _register_service_standalone,
+)
+from .request_spend import (
+    RequestSpendResult,
+    request_spend as _request_spend_standalone,
+)
 from .types import (
     CreditVaultAccount,
     ReputationLookup,
+    ServiceCategory,
     ServiceRegistryAccount,
     SpendPolicyAccount,
     decode_credit_vault,
@@ -71,8 +81,12 @@ class AgentFuel:
         self.api_base = api_base.rstrip("/")
         self.owner: Pubkey | None = to_pubkey(owner) if owner is not None else None
         # `_owns_http` distinguishes "user supplied" from "we created" so we
-        # only close the client we constructed ourselves.
-        self._http = http_client or httpx.AsyncClient(timeout=10.0)
+        # only close the client we constructed ourselves. The 30s timeout
+        # accommodates Solana's public devnet RPC which routinely takes
+        # 5-15s during TLS handshake under load — tighter ceilings produce
+        # spurious ConnectTimeout failures. Callers who want a stricter
+        # bound can pass their own `http_client=`.
+        self._http = http_client or httpx.AsyncClient(timeout=30.0)
         self._owns_http = http_client is None
 
     @property
@@ -123,6 +137,63 @@ class AgentFuel:
         pda = service_registry_pda(service_authority)
         data = await self._fetch_account(pda, REPUTATION_PROGRAM_ID)
         return decode_service_registry(pda, data)
+
+    # ---- action methods ---------------------------------------------------
+
+    async def pay(
+        self,
+        *,
+        service: Keypair,
+        amount_usdc: int,
+        receipt_hash: bytes,
+        owner: Pubkeyish | None = None,
+    ) -> PayResult:
+        """Atomic spend + record_payment + compute_score. See `pay()`
+        standalone for full semantics."""
+        return await _pay_standalone(
+            agent=self.agent,
+            service=service,
+            owner=self._resolve_owner(owner),
+            amount_usdc=amount_usdc,
+            receipt_hash=receipt_hash,
+            http_client=self._http,
+            rpc_url=self.rpc_url,
+        )
+
+    async def request_spend(
+        self,
+        *,
+        service: Pubkeyish,
+        amount_usdc: int,
+        owner: Pubkeyish | None = None,
+    ) -> RequestSpendResult:
+        return await _request_spend_standalone(
+            agent=self.agent,
+            owner=self._resolve_owner(owner),
+            service=service,
+            amount_usdc=amount_usdc,
+            http_client=self._http,
+            rpc_url=self.rpc_url,
+        )
+
+    async def register_service(
+        self,
+        *,
+        sponsor: Keypair,
+        service: Keypair,
+        name: str,
+        category: ServiceCategory,
+        service_uri: str | None = None,
+    ) -> RegisterServiceResult:
+        return await _register_service_standalone(
+            sponsor=sponsor,
+            service=service,
+            name=name,
+            category=category,
+            service_uri=service_uri,
+            http_client=self._http,
+            rpc_url=self.rpc_url,
+        )
 
     # ---- internals --------------------------------------------------------
 

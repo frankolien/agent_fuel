@@ -2,6 +2,26 @@
 
 All notable changes to `agent-fuel-sdk` (Python) are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-06-03
+
+Slice 2 of 4 — action methods. The SDK is now write-capable.
+
+### Added
+
+- `fuel.pay({ service, amount_usdc, receipt_hash, owner? })` — atomic `spend` + `record_payment` + `compute_score` in one transaction. Service keypair co-signs the reputation half; the bundled `compute_score` is the same fix shipped in `@agent-fuel/sdk@0.3.2`, so the on-chain agent_profile.score advances with every payment instead of sitting stale at 0. Pre-flight runs the local six-check guardrail (frozen / zero / whitelist / per-tx / hourly / lifetime); on-chain `VaultError` codes 6001–6006 map back to the same typed `SpendPolicyError` subclasses so one `except SpendPolicyError` catches both. Also surfaces `ReceiptAlreadyRecordedError` and `ServiceInactiveError` from the reputation half.
+- `fuel.request_spend({ service, amount_usdc, owner? })` — over-limit approval flow. Reads the vault's `pending_count` to derive the `PendingSpend` PDA, then returns `(signature, pending_spend, nonce)` so the bot can poll for the owner's verdict from the mobile app.
+- `fuel.register_service({ sponsor, service, name, category, service_uri? })` — two-signer service registration. Sponsor pays rent + submits; service is the long-lived signing identity that co-signs every future `record_payment`.
+- Standalone `pay()` / `request_spend()` / `register_service()` functions for callers that prefer functional shape over the client class.
+- `guardrails.guard_spend(...)` — local mirror of the on-chain six-check ladder. Each per-tx / hourly / lifetime check is gated on `limit > 0`, matching the on-chain convention that a zero limit means "no enforcement" rather than "zero allowed" (caught in slice-2 verification — the Python port initially rejected every spend on an unlimited policy). Public so callers can pre-flight without spending a tx slot.
+- `instructions` module — hand-rolled Anchor instruction builders (`spend_ix`, `record_payment_ix`, `compute_score_ix`, `request_spend_ix`, `register_service_ix`, plus the SPL idempotent-ATA-create instruction). Discriminators are computed at runtime via `anchor_discriminator(name)` so a new on-chain instruction needs no constant-table update.
+- `rpc` module — `get_latest_blockhash`, `send_transaction`, `confirm_signature`, `send_and_confirm`. Pure JSON-RPC over `httpx`, no extra connection pools — every helper reuses the `httpx.AsyncClient` the `AgentFuel` client already holds.
+- `anchor_errors.map_pay_error` / `map_spend_error` — RPC simulation strings → typed exception rewrites so callers branch on type, not text.
+
+### Notes
+
+- Verified end-to-end on devnet against the same `Cowi… / 5ro8…` vault used to verify slice 1.
+- `compute_score` bundling carries over the lesson from the score-pipeline incident — see `project_score_pipeline.md` for the full incident.
+
 ## [0.1.0] — 2026-06-03
 
 First release. Slice 1 of 4 in the Python port of the TypeScript SDK ([`@agent-fuel/sdk`](https://www.npmjs.com/package/@agent-fuel/sdk)) — read-only surface. Action methods, live events, and the x402 wrapper land in subsequent slices.
