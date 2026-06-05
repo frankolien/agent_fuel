@@ -74,10 +74,10 @@ def extract_error_codes(message: str) -> list[int]:
 def map_spend_error(
     err: Exception,
     *,
-    service: "Pubkey",
+    service: Pubkey,
     amount_usdc: int,
-    vault: "CreditVaultAccount",
-    policy: "SpendPolicyAccount",
+    vault: CreditVaultAccount,
+    policy: SpendPolicyAccount,
 ) -> Exception:
     """Rewrite RPC / simulation errors raised by `spend` (or the spend
     half of `pay` / approve_spend) into the same typed exceptions the
@@ -109,11 +109,11 @@ def map_spend_error(
 def map_pay_error(
     err: Exception,
     *,
-    service: "Pubkey",
+    service: Pubkey,
     amount_usdc: int,
     receipt_hash: bytes,
-    vault: "CreditVaultAccount",
-    policy: "SpendPolicyAccount",
+    vault: CreditVaultAccount,
+    policy: SpendPolicyAccount,
 ) -> Exception:
     """Same as `map_spend_error` but also catches the receipt-replay and
     service-inactive cases that only appear via the reputation half of

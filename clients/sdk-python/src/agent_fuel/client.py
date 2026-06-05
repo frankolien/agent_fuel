@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Literal
+from typing import Any, Literal
 
 import httpx
 from solders.keypair import Keypair
@@ -11,7 +12,8 @@ from solders.rpc.responses import GetAccountInfoResp
 from .constants import CREDIT_VAULT_PROGRAM_ID, REPUTATION_PROGRAM_ID
 from .errors import AccountNotFoundError, HttpError, OwnerNotConfiguredError
 from .live import Subscription, channel_url, subscribe
-from .pay import PayResult, pay as _pay_standalone
+from .pay import PayResult
+from .pay import pay as _pay_standalone
 from .pda import (
     Pubkeyish,
     policy_pda,
@@ -21,13 +23,18 @@ from .pda import (
 )
 from .register_service import (
     RegisterServiceResult,
+)
+from .register_service import (
     register_service as _register_service_standalone,
 )
 from .request_spend import (
     RequestSpendResult,
+)
+from .request_spend import (
     request_spend as _request_spend_standalone,
 )
-from .spend import SpendResult, spend as _spend_standalone
+from .spend import SpendResult
+from .spend import spend as _spend_standalone
 from .types import (
     CreditVaultAccount,
     LiveEventFrame,
@@ -98,7 +105,7 @@ class AgentFuel:
     def agent_pubkey(self) -> Pubkey:
         return self.agent.pubkey()
 
-    async def __aenter__(self) -> "AgentFuel":
+    async def __aenter__(self) -> AgentFuel:
         return self
 
     async def __aexit__(self, *exc: object) -> None:
@@ -310,7 +317,12 @@ class AgentFuel:
         res = await self._http.post(self.rpc_url, json=payload)
         if res.status_code >= 400:
             raise HttpError(res.status_code, self.rpc_url, _safe_text(res))
-        parsed = GetAccountInfoResp.from_json(res.text)
+        # `from_json` returns a 19-variant union spanning success and every
+        # JSON-RPC error shape (solders ships no narrowed `from_json_success`).
+        # Cast to Any so the runtime guard below — which IS the narrowing —
+        # isn't shadowed by mypy's pessimistic view; an actual error variant
+        # would still surface via the HTTP status check above.
+        parsed: Any = GetAccountInfoResp.from_json(res.text)
         if parsed.value is None:
             raise AccountNotFoundError(str(address))
         if parsed.value.owner != expected_owner:

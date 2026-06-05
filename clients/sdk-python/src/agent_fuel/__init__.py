@@ -11,7 +11,7 @@ payments to recipients that aren't registered as services.
 
 from __future__ import annotations
 
-from .client import AgentFuel, Cluster, DEFAULT_API_BASE, VaultRef
+from .client import DEFAULT_API_BASE, AgentFuel, Cluster, VaultRef
 from .constants import (
     ASSOCIATED_TOKEN_PROGRAM_ID,
     CREDIT_VAULT_PROGRAM_ID,

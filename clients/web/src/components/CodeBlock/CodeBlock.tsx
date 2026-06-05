@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 
-export type Lang = "ts" | "bash";
+export type Lang = "ts" | "bash" | "python";
 
 export function CodeBlock({ children, lang = "ts" }: { children: string; lang?: Lang }) {
   const [copied, setCopied] = useState(false);
@@ -40,13 +40,21 @@ const TS_KEYWORDS = new Set([
 const BASH_BUILTINS = new Set([
   "cd", "ls", "cat", "echo", "export", "curl", "git", "npm", "node", "cargo",
   "anchor", "solana", "kill", "mkdir", "rm", "cp", "mv", "grep", "sed", "awk",
-  "pnpm", "yarn", "bun",
+  "pnpm", "yarn", "bun", "pip", "python", "python3",
+]);
+
+const PY_KEYWORDS = new Set([
+  "def", "async", "await", "import", "from", "as", "return", "if", "elif",
+  "else", "for", "in", "while", "try", "except", "finally", "raise", "with",
+  "class", "lambda", "pass", "True", "False", "None", "and", "or", "not", "is",
+  "yield", "global", "nonlocal", "break", "continue",
 ]);
 
 type Tok = { cls: string; text: string };
 
 function highlight(src: string, lang: Lang): ReactNode[] {
-  const tokens = lang === "bash" ? tokenizeBash(src) : tokenizeTs(src);
+  const tokens =
+    lang === "bash" ? tokenizeBash(src) : lang === "python" ? tokenizePy(src) : tokenizeTs(src);
   return tokens.map((t, i) =>
     t.cls ? (
       <span key={i} className={t.cls}>
@@ -168,6 +176,62 @@ function tokenizeBash(src: string): Tok[] {
       out.push({ cls: "text-muted", text: rest.charAt(0) });
       i += 1;
     }
+  }
+  return out;
+}
+
+function tokenizePy(src: string): Tok[] {
+  const out: Tok[] = [];
+  let i = 0;
+  while (i < src.length) {
+    const rest = src.slice(i);
+    const cm = rest.match(/^#[^\n]*/);
+    if (cm) {
+      out.push({ cls: "text-muted-2", text: cm[0] });
+      i += cm[0].length;
+      continue;
+    }
+    // Triple-quoted strings — match before single-quoted so the inner quote
+    // doesn't terminate the run.
+    const tstr = rest.match(/^("""|''')[\s\S]*?\1/);
+    if (tstr) {
+      out.push({ cls: "text-[var(--color-syntax-string)]", text: tstr[0] });
+      i += tstr[0].length;
+      continue;
+    }
+    const fstr = rest.match(/^[fbr]?(["'])(?:\\.|(?!\1)[^\\\n])*\1/);
+    if (fstr) {
+      out.push({ cls: "text-[var(--color-syntax-string)]", text: fstr[0] });
+      i += fstr[0].length;
+      continue;
+    }
+    const num = rest.match(/^\d[\d_]*(?:\.\d+)?/);
+    if (num) {
+      out.push({ cls: "text-fg", text: num[0] });
+      i += num[0].length;
+      continue;
+    }
+    const id = rest.match(/^[A-Za-z_][\w]*/);
+    if (id) {
+      const word = id[0];
+      if (PY_KEYWORDS.has(word)) {
+        out.push({ cls: "text-mint", text: word });
+      } else if (/^\s*\(/.test(rest.slice(word.length))) {
+        out.push({ cls: "text-[var(--color-syntax-fn)]", text: word });
+      } else {
+        out.push({ cls: "", text: word });
+      }
+      i += word.length;
+      continue;
+    }
+    const ws = rest.match(/^\s+/);
+    if (ws) {
+      out.push({ cls: "", text: ws[0] });
+      i += ws[0].length;
+      continue;
+    }
+    out.push({ cls: "text-muted", text: rest.charAt(0) });
+    i += 1;
   }
   return out;
 }

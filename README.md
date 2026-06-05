@@ -2,7 +2,7 @@
 
 **Credit-vault + reputation primitives for autonomous AI agents on Solana**
 
-[![npm](https://img.shields.io/npm/v/@agent-fuel/sdk)](https://www.npmjs.com/package/@agent-fuel/sdk) ![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg) ![Network: Solana](https://img.shields.io/badge/network-Solana%20devnet-brightgreen) ![Backend: Railway](https://img.shields.io/badge/backend-live%20on%20Railway-green)
+[![npm](https://img.shields.io/npm/v/@agent-fuel/sdk)](https://www.npmjs.com/package/@agent-fuel/sdk) [![PyPI](https://img.shields.io/pypi/v/agent-fuel-sdk)](https://pypi.org/project/agent-fuel-sdk/) ![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg) ![Network: Solana](https://img.shields.io/badge/network-Solana%20devnet-brightgreen) ![Backend: Railway](https://img.shields.io/badge/backend-live%20on%20Railway-green)
 
 ---
 
@@ -87,13 +87,17 @@ The dev-USDC mint above (`EMm5UveN…jFXDg` for credit_vault), Helius webhook se
 
 ## Install
 
+Two first-class SDKs, same surface:
+
 ```bash
+# TypeScript / Node
 npm install @agent-fuel/sdk
+
+# Python (≥ 3.10)
+pip install agent-fuel-sdk
 ```
 
-Peer deps: `@solana/web3.js ^1.95`, `@coral-xyz/anchor ^0.31`. Node ≥ 18.18.
-
-The package also ships an `agent-fuel` CLI. Inspect anything on chain with zero setup:
+TypeScript peer deps: `@solana/web3.js ^1.95`, `@coral-xyz/anchor ^0.31`. Node ≥ 18.18. The TS package also ships an `agent-fuel` CLI — inspect anything on chain with zero setup:
 
 ```bash
 npx @agent-fuel/sdk vault   <OWNER_PUBKEY> <AGENT_PUBKEY>
@@ -101,7 +105,7 @@ npx @agent-fuel/sdk score   <AGENT_PUBKEY>
 npx @agent-fuel/sdk service <AUTHORITY_PUBKEY>
 ```
 
-Full surface in [`clients/sdk/README.md`](clients/sdk/README.md#cli).
+Full TS surface in [`clients/sdk/README.md`](clients/sdk/README.md#cli). Python surface in [`clients/sdk-python/README.md`](clients/sdk-python/README.md).
 
 ## The Six Functions
 

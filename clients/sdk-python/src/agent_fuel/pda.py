@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Union
-
 from solders.pubkey import Pubkey
 
 from .constants import CREDIT_VAULT_PROGRAM_ID, REPUTATION_PROGRAM_ID
 
-Pubkeyish = Union[Pubkey, str]
+Pubkeyish = Pubkey | str
 
 
 def to_pubkey(value: Pubkeyish) -> Pubkey:

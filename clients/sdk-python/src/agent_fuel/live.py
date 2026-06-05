@@ -17,13 +17,19 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Literal
+from typing import Literal
 
 import websockets
 from websockets.exceptions import ConnectionClosed
 
 from .types import LiveEventFrame, LiveStatus
+
+# Older websockets pinned this name on the package; newer versions moved it
+# under `websockets.asyncio.client`. The SDK doesn't care which type it is —
+# we just call `.recv()` and the async-context-manager protocol on it.
+_WSConnection = object  # mypy uses this; runtime ignores
 
 logger = logging.getLogger("agent_fuel.live")
 
@@ -41,7 +47,7 @@ class Subscription:
 
     _task: asyncio.Task[None]
     _close_event: asyncio.Event
-    _status_ref: "_StatusRef"
+    _status_ref: _StatusRef
 
     @property
     def status(self) -> LiveStatus:
@@ -77,7 +83,7 @@ class _StatusRef:
 async def _invoke(handler: Callable[..., None | Awaitable[None]] | None, arg: object) -> None:
     if handler is None:
         return
-    result = handler(arg)  # type: ignore[arg-type]
+    result = handler(arg)
     if asyncio.iscoroutine(result):
         await result
 
@@ -131,14 +137,14 @@ def subscribe(
 
 
 async def _pump_messages(
-    ws: websockets.WebSocketClientProtocol,
+    ws: object,
     on_frame: FrameHandler,
     close_event: asyncio.Event,
 ) -> None:
     close_waiter = asyncio.create_task(close_event.wait())
     try:
         while not close_event.is_set():
-            recv_task = asyncio.create_task(ws.recv())
+            recv_task = asyncio.create_task(ws.recv())  # type: ignore[attr-defined]
             done, _ = await asyncio.wait(
                 {recv_task, close_waiter}, return_when=asyncio.FIRST_COMPLETED
             )
@@ -171,12 +177,28 @@ def _decode_frame(parsed: dict[str, object]) -> LiveEventFrame:
     return LiveEventFrame(
         type="event",
         signature=str(parsed.get("signature", "")),
-        log_index=int(parsed.get("log_index", 0) or 0),
-        slot=int(parsed.get("slot", 0) or 0),
+        log_index=_coerce_int(parsed.get("log_index")),
+        slot=_coerce_int(parsed.get("slot")),
         program_id=str(parsed.get("program_id", "")),
         event_name=str(parsed.get("event_name", "")),
         payload=payload if isinstance(payload, dict) else {},
     )
+
+
+def _coerce_int(value: object) -> int:
+    """Best-effort cast for the numeric fields on a live frame. JSON ints
+    arrive as `int`, but defensive against `None` / floats / numeric strings
+    so a backend tweak doesn't crash every subscriber."""
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (float, str)):
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return 0
+    return 0
 
 
 # --- URL helpers -------------------------------------------------------------

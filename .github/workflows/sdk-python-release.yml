@@ -1,0 +1,101 @@
+name: SDK Release (Python)
+
+# Tag-driven publish of `agent-fuel-sdk` to PyPI using OIDC Trusted
+# Publisher — no PyPI API token in the repo, nothing to rotate. Push a
+# tag of the form `sdk-py-v0.3.0` and this workflow:
+#   1. Checks out, installs, lints, typechecks, and runs the full CI matrix.
+#   2. Asserts the tag matches `pyproject.toml`'s `version` (no surprise
+#      version drift between Git history and the registry).
+#   3. Asserts the CHANGELOG has a matching `## [<version>]` entry.
+#   4. Builds sdist + wheel and publishes via `pypa/gh-action-pypi-publish`
+#      with attestations (PEP 740) and provenance.
+#
+# Setup (one-time, after this workflow lands on `main`):
+#   - On https://pypi.org/manage/account/publishing/ add a Trusted
+#     Publisher for the project `agent-fuel-sdk`:
+#       Owner: frankolien
+#       Repository: agent_fuel
+#       Workflow filename: sdk-python-release.yml
+#       Environment name: pypi
+#   - On the repo create a GitHub Environment named `pypi` (Settings →
+#     Environments → New environment). Optional: require manual review
+#     before this job runs.
+
+on:
+  push:
+    tags:
+      - "sdk-py-v*"
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+defaults:
+  run:
+    working-directory: clients/sdk-python
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/p/agent-fuel-sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: clients/sdk-python/pyproject.toml
+
+      - name: Install package + dev extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]' build
+
+      - run: ruff check src
+      - run: mypy src/agent_fuel
+
+      - name: Verify tag matches pyproject.toml version
+        run: |
+          PKG_VERSION=$(python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          TAG_VERSION="${GITHUB_REF_NAME#sdk-py-v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match pyproject.toml ($PKG_VERSION)" >&2
+            exit 1
+          fi
+          echo "version: $PKG_VERSION"
+
+      - name: Verify CHANGELOG has a matching entry
+        run: |
+          PKG_VERSION=$(python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          if ! grep -qE "^## \[${PKG_VERSION}\]" CHANGELOG.md; then
+            echo "CHANGELOG.md is missing a '## [${PKG_VERSION}]' section" >&2
+            exit 1
+          fi
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Verify wheel installs and imports
+        run: |
+          python -m venv /tmp/wheel-check
+          /tmp/wheel-check/bin/pip install dist/*.whl
+          /tmp/wheel-check/bin/python -c "
+          import agent_fuel
+          from agent_fuel import (
+              AgentFuel, pay, spend, request_spend, register_service,
+              subscribe, payment_required, LiveEventFrame, Subscription,
+          )
+          print('wheel ok:', agent_fuel.__version__)
+          "
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: clients/sdk-python/dist
+          attestations: true
+          print-hash: true

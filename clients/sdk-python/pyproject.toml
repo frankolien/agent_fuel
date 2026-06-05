@@ -53,8 +53,16 @@ select = ["E", "F", "I", "B", "UP", "W"]
 
 [tool.mypy]
 python_version = "3.10"
-strict = true
+# Loose-but-useful baseline. Strict mode is unworkable while `solders`
+# (no `py.typed`) returns 19-variant unions from every RPC parser and
+# `construct` ships no stubs. Tighten in a follow-up when those land.
 warn_unused_ignores = true
+check_untyped_defs = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["construct", "websockets.*", "solders.*", "base58.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

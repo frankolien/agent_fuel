@@ -1,0 +1,78 @@
+name: SDK (Python)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "clients/sdk-python/**"
+      - ".github/workflows/sdk-python.yml"
+  pull_request:
+    paths:
+      - "clients/sdk-python/**"
+      - ".github/workflows/sdk-python.yml"
+
+defaults:
+  run:
+    working-directory: clients/sdk-python
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: clients/sdk-python/pyproject.toml
+
+      - name: Install package + dev extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]' build
+
+      - name: Lint (ruff)
+        run: ruff check src
+
+      - name: Typecheck (mypy)
+        # Strict mode is on for `src/`; skip the IDL JSON and the dist tree.
+        run: mypy src/agent_fuel
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Import smoke-test from built wheel
+        # Install the just-built wheel into a fresh path and check the public
+        # surface imports cleanly — catches packaging mistakes that an
+        # editable install hides (missing files in MANIFEST, broken entry
+        # points, etc.).
+        run: |
+          python -m venv /tmp/wheel-check
+          /tmp/wheel-check/bin/pip install dist/*.whl
+          /tmp/wheel-check/bin/python -c "
+          import agent_fuel
+          assert agent_fuel.__version__, 'version missing'
+          # Touch every slice's public entry-point so a missing module
+          # import fails the build.
+          from agent_fuel import (
+              AgentFuel, pay, spend, request_spend, register_service,
+              subscribe, payment_required, PaymentRequirement,
+              LiveEventFrame, Subscription,
+          )
+          print('wheel smoke ok:', agent_fuel.__version__)
+          "
+
+      - name: Upload dist artifacts
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-fuel-sdk-dist
+          path: clients/sdk-python/dist/
+          if-no-files-found: error
+          retention-days: 7

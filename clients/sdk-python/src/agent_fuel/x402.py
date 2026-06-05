@@ -11,8 +11,9 @@ restructuring them."""
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import httpx
 
@@ -45,12 +46,12 @@ PaidHook = Callable[[str, PaymentRequirement], None | Awaitable[None]]
 
 
 def payment_required(
-    fuel: "AgentFuelLike",
+    fuel: Any,
     *,
     http_client: httpx.AsyncClient,
     on_payment_required: PaymentRequiredHook | None = None,
     on_paid: PaidHook | None = None,
-) -> "PaymentRequiredFetcher":
+) -> PaymentRequiredFetcher:
     """Build a fetch-shaped callable bound to this `AgentFuel` instance.
     The returned object is both directly callable (`await fetcher("GET",
     url)`) and exposes per-method helpers (`fetcher.get(url, ...)`)."""
@@ -77,7 +78,7 @@ class PaymentRequiredFetcher:
     def __init__(
         self,
         *,
-        fuel: "AgentFuelLike",
+        fuel: Any,
         http_client: httpx.AsyncClient,
         on_payment_required: PaymentRequiredHook | None,
         on_paid: PaidHook | None,
@@ -123,14 +124,6 @@ class PaymentRequiredFetcher:
 
     async def delete(self, url: str, **kwargs: Any) -> httpx.Response:
         return await self.request("DELETE", url, **kwargs)
-
-
-# Structural duck-type — anything with a `.spend(recipient=..., amount_usdc=...)`
-# coroutine satisfies the contract. Keeps `x402` import-cycle-free from
-# `client.py` while making the type signature self-documenting.
-class AgentFuelLike:
-    async def spend(self, *, recipient: str, amount_usdc: int) -> Any:  # pragma: no cover
-        ...
 
 
 def _parse_requirement(res: httpx.Response) -> PaymentRequirement:
