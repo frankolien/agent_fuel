@@ -2,6 +2,24 @@
 
 All notable changes to `agent-fuel-sdk` (Python) are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-06-05
+
+Slice 3 of 4 — live event subscriptions + the x402 fetch wrapper. The SDK now covers the same surface as `@agent-fuel/sdk@0.3.x` apart from the CLI.
+
+### Added
+
+- `fuel.on_event(callback, agent=?, on_status=?)` — async WebSocket subscription to the backend's `/ws/agents/<pubkey>` channel. Callback can be sync or async; `on_status` fires on every `connecting → open → reconnecting → closed` transition. Returns a `Subscription` whose `await sub.close()` tears the socket down cleanly. Reconnects on transient drops with exponential backoff capped at 30s.
+- `fuel.on_service_event(service, callback, on_status=?)` and `fuel.on_vault_event(vault, callback, on_status=?)` — entity-scoped variants for callers that don't have an agent keypair (e.g. a service-side recorder).
+- Low-level `subscribe(url, on_frame, on_status)` + `ws_url(api_base, path)` + `channel_url(api_base, channel, pubkey)` helpers for callers that want to build the URL themselves.
+- `fuel.spend(recipient=..., amount_usdc=..., owner=?)` — standalone vault burn without recording a reputation event. Use this when paying x402 servers that aren't registered as Services; reuses the same six-check guardrail and on-chain error mapping as `pay()`. The earlier `spend_ix(...)` builder remains for callers that compose their own transactions.
+- `fuel.payment_required(on_payment_required=?, on_paid=?, http_client=?)` — fetch-shaped HTTP wrapper that auto-pays on 402. Parses both the SDK-native (`recipient` / `amount_usdc` / `amountUsdc`) and x402-spec (`payTo` / `maxAmountRequired`) field names. The retry is single-attempt — a second 402 propagates to the caller so a misbehaving server can't drain the vault in a loop. Defaults to the shared `httpx.AsyncClient` the client already holds.
+- `PaymentRequirement`, `PaymentRequiredFetcher`, `PaymentParseError`, `LiveEventFrame`, `LiveStatus`, `Subscription`, `SpendResult` — new public types.
+
+### Notes
+
+- The WebSocket implementation uses the `websockets` library already pinned in `pyproject.toml` (added in 0.1.0 for this slice). Ping/pong keepalives are handled by the library; the SDK forwards parsed event frames only.
+- Mirrors `clients/sdk/src/live.ts` and `clients/sdk/src/x402.ts` line-for-line where the languages allow — same field names, same status state machine, same single-retry rule. Cross-language users move between TS and Python with no surface remapping.
+
 ## [0.2.0] — 2026-06-03
 
 Slice 2 of 4 — action methods. The SDK is now write-capable.

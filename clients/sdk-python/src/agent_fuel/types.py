@@ -196,6 +196,23 @@ class AgentProfileAccount:
     reputation_score: int
 
 
+# Live-event frame matches the backend's `ws_hub::broadcast_events` JSON
+# shape and the TS SDK's `LiveEventFrame`. Forwarded verbatim; callers
+# that want typed payloads narrow on `event_name`.
+LiveStatus = Literal["connecting", "open", "reconnecting", "closed"]
+
+
+@dataclass(frozen=True)
+class LiveEventFrame:
+    type: Literal["event"]
+    signature: str
+    log_index: int
+    slot: int
+    program_id: str
+    event_name: str
+    payload: dict[str, object]
+
+
 @dataclass(frozen=True)
 class ReputationLookup:
     """REST snapshot returned by `GET /reputation/:agent` on the backend.

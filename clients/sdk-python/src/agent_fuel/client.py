@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Awaitable, Callable, Literal
 
 import httpx
 from solders.keypair import Keypair
@@ -10,6 +10,7 @@ from solders.rpc.responses import GetAccountInfoResp
 
 from .constants import CREDIT_VAULT_PROGRAM_ID, REPUTATION_PROGRAM_ID
 from .errors import AccountNotFoundError, HttpError, OwnerNotConfiguredError
+from .live import Subscription, channel_url, subscribe
 from .pay import PayResult, pay as _pay_standalone
 from .pda import (
     Pubkeyish,
@@ -26,8 +27,11 @@ from .request_spend import (
     RequestSpendResult,
     request_spend as _request_spend_standalone,
 )
+from .spend import SpendResult, spend as _spend_standalone
 from .types import (
     CreditVaultAccount,
+    LiveEventFrame,
+    LiveStatus,
     ReputationLookup,
     ServiceCategory,
     ServiceRegistryAccount,
@@ -36,6 +40,7 @@ from .types import (
     decode_service_registry,
     decode_spend_policy,
 )
+from .x402 import PaidHook, PaymentRequiredFetcher, PaymentRequiredHook, payment_required
 
 Cluster = Literal["mainnet-beta", "devnet", "testnet", "localnet"]
 
@@ -193,6 +198,94 @@ class AgentFuel:
             service_uri=service_uri,
             http_client=self._http,
             rpc_url=self.rpc_url,
+        )
+
+    async def spend(
+        self,
+        *,
+        recipient: Pubkeyish,
+        amount_usdc: int,
+        owner: Pubkeyish | None = None,
+    ) -> SpendResult:
+        """Burn USDC from the vault to `recipient` without recording a
+        reputation event. Use this for x402 payments to servers that
+        aren't registered as Services; use `pay()` when they are."""
+        return await _spend_standalone(
+            agent=self.agent,
+            owner=self._resolve_owner(owner),
+            recipient=recipient,
+            amount_usdc=amount_usdc,
+            http_client=self._http,
+            rpc_url=self.rpc_url,
+        )
+
+    # ---- live events ------------------------------------------------------
+
+    def on_event(
+        self,
+        callback: Callable[[LiveEventFrame], None | Awaitable[None]],
+        *,
+        agent: Pubkeyish | None = None,
+        on_status: Callable[[LiveStatus], None | Awaitable[None]] | None = None,
+    ) -> Subscription:
+        """Subscribe to the backend's live-event stream for `agent`
+        (defaults to this client's own agent). Returns a `Subscription`
+        whose `close()` tears down the socket; survives transient drops
+        via exponential-backoff reconnect."""
+        target = to_pubkey(agent) if agent is not None else self.agent_pubkey
+        return subscribe(
+            channel_url(self.api_base, "agents", str(target)),
+            on_frame=callback,
+            on_status=on_status,
+        )
+
+    def on_service_event(
+        self,
+        service: Pubkeyish,
+        callback: Callable[[LiveEventFrame], None | Awaitable[None]],
+        *,
+        on_status: Callable[[LiveStatus], None | Awaitable[None]] | None = None,
+    ) -> Subscription:
+        """Subscribe to the service channel — every payment received by
+        `service` arrives as a `record_payment` frame."""
+        return subscribe(
+            channel_url(self.api_base, "services", str(to_pubkey(service))),
+            on_frame=callback,
+            on_status=on_status,
+        )
+
+    def on_vault_event(
+        self,
+        vault: Pubkeyish,
+        callback: Callable[[LiveEventFrame], None | Awaitable[None]],
+        *,
+        on_status: Callable[[LiveStatus], None | Awaitable[None]] | None = None,
+    ) -> Subscription:
+        return subscribe(
+            channel_url(self.api_base, "vaults", str(to_pubkey(vault))),
+            on_frame=callback,
+            on_status=on_status,
+        )
+
+    # ---- x402 -------------------------------------------------------------
+
+    def payment_required(
+        self,
+        *,
+        on_payment_required: PaymentRequiredHook | None = None,
+        on_paid: PaidHook | None = None,
+        http_client: httpx.AsyncClient | None = None,
+    ) -> PaymentRequiredFetcher:
+        """Fetch-shaped wrapper that auto-pays on HTTP 402 via
+        `self.spend()`. The retry is single-attempt — a second 402
+        propagates so a misbehaving server can't drain the vault.
+        Defaults to the shared `httpx.AsyncClient` this client already
+        holds; pass `http_client=` to route through a different one."""
+        return payment_required(
+            self,
+            http_client=http_client or self._http,
+            on_payment_required=on_payment_required,
+            on_paid=on_paid,
         )
 
     # ---- internals --------------------------------------------------------

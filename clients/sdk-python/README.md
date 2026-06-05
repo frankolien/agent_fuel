@@ -2,7 +2,7 @@
 
 Python SDK for [Agent Fuel](https://agentfuel.online) — credit vault + reputation primitives for AI agents on Solana.
 
-> **Status:** `0.2.0` (alpha). Slices 1–2 ship reads + actions: `get_score`, `get_vault_balance`, `get_policy`, `check_service`, **`pay`** (atomic spend + record_payment + compute_score), **`request_spend`**, **`register_service`**. WebSocket live events + the x402 fetch wrapper land in slice 3. The TypeScript SDK ([`@agent-fuel/sdk`](https://www.npmjs.com/package/@agent-fuel/sdk)) is the reference for the full surface today.
+> **Status:** `0.3.0` (alpha). Slices 1–3 ship reads, actions, live events, and the x402 fetch wrapper: `get_score`, `get_vault_balance`, `get_policy`, `check_service`, **`pay`** (atomic spend + record_payment + compute_score), **`spend`** (no-receipt vault burn), **`request_spend`**, **`register_service`**, **`on_event`** (WebSocket with auto-reconnect), **`payment_required`** (HTTP 402 wrapper). Only PyPI publish automation + the docs site Python section remain (slice 4). Mirrors [`@agent-fuel/sdk`](https://www.npmjs.com/package/@agent-fuel/sdk) line-for-line where the languages allow.
 
 ## Install
 
@@ -108,6 +108,61 @@ asyncio.run(main())
 
 The `SpendPolicyError` hierarchy is now active — `except SpendPolicyError` catches all six on-chain rejections (frozen / zero / whitelist / per-tx / hourly / lifetime) plus their pre-flight equivalents thrown by the local guardrail.
 
+## Live events (slice 3)
+
+```python
+import asyncio
+from solders.keypair import Keypair
+from agent_fuel import AgentFuel, LiveEventFrame, LiveStatus
+
+
+async def main() -> None:
+    agent = Keypair.from_json(open("agent.json").read())
+
+    async with AgentFuel(agent=agent, cluster="devnet", owner="...") as fuel:
+        def on_frame(frame: LiveEventFrame) -> None:
+            print(frame.event_name, frame.signature, frame.payload)
+
+        def on_status(status: LiveStatus) -> None:
+            print("ws:", status)
+
+        sub = fuel.on_event(on_frame, on_status=on_status)
+        try:
+            await asyncio.sleep(60)
+        finally:
+            await sub.close()
+
+
+asyncio.run(main())
+```
+
+Reconnects automatically with exponential backoff up to 30s. `fuel.on_service_event(service, ...)` and `fuel.on_vault_event(vault, ...)` cover the other two entity channels — useful for service-side recorders that don't own the agent's keypair.
+
+## x402 (slice 3)
+
+```python
+import asyncio
+from solders.keypair import Keypair
+from agent_fuel import AgentFuel
+
+
+async def main() -> None:
+    agent = Keypair.from_json(open("agent.json").read())
+
+    async with AgentFuel(agent=agent, cluster="devnet", owner="...") as fuel:
+        fetcher = fuel.payment_required(
+            on_payment_required=lambda req: print("402:", req.recipient, req.amount_usdc),
+            on_paid=lambda sig, req: print("paid:", sig),
+        )
+        res = await fetcher.get("https://paid.example.com/weather?city=NYC")
+        print(res.status_code, res.text)
+
+
+asyncio.run(main())
+```
+
+`fetcher` is fetch-shaped (`get` / `post` / `put` / `patch` / `delete` / `request`). On a 402 the requirement is parsed (accepts `recipient` / `amount_usdc` / `amountUsdc` / `payTo` / `maxAmountRequired`), the on-chain `spend()` lands, and the request is retried once with `X-Payment: <signature>`. A second 402 propagates so a misbehaving server can't drain the vault.
+
 ## Errors
 
 Every read raises `AccountNotFoundError` when the target doesn't exist on-chain or the backend returns 404. RPC and REST failures raise `HttpError`. Methods that need a vault owner without one configured raise `OwnerNotConfiguredError`. The full hierarchy mirrors [`@agent-fuel/sdk`](https://www.npmjs.com/package/@agent-fuel/sdk):
@@ -125,15 +180,13 @@ from agent_fuel import (
 )
 ```
 
-The `SpendPolicyError` subclasses surface only once `pay()` / `spend()` ship in slice 2.
-
 ## What's coming
 
 | Slice | Methods |
 |---|---|
 | 1 | `get_score` · `get_vault_balance` · `get_policy` · `check_service` |
-| 2 (this) | `pay` (atomic spend + record_payment + compute_score) · `request_spend` · `register_service` |
-| 3 | `on_event` (WebSocket with reconnect) · `payment_required` (x402 fetch wrapper) |
+| 2 | `pay` (atomic spend + record_payment + compute_score) · `request_spend` · `register_service` |
+| 3 (this) | `spend` · `on_event` / `on_service_event` / `on_vault_event` (WebSocket with reconnect) · `payment_required` (x402 fetch wrapper) |
 | 4 | PyPI publish workflow · docs site Python section |
 
 ## License
