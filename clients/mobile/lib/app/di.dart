@@ -26,6 +26,8 @@ import '../features/services/domain/usecases/register_service.dart';
 import '../features/services/presentation/bloc/services_bloc.dart';
 import '../features/wallet/data/datasources/auth_token_store.dart';
 import '../features/wallet/data/datasources/mwa_datasource.dart';
+import '../features/wallet/data/datasources/phantom_deeplink_datasource.dart';
+import '../features/wallet/data/datasources/phantom_session_store.dart';
 import '../features/wallet/data/datasources/wallet_balance_service.dart';
 import '../features/wallet/data/repositories/wallet_repository.dart';
 import 'router.dart';
@@ -67,7 +69,11 @@ Future<void> configureDependencies() async {
   );
 
   sl.registerLazySingleton<AuthTokenStore>(AuthTokenStore.new);
+  sl.registerLazySingleton<PhantomSessionStore>(PhantomSessionStore.new);
   sl.registerLazySingleton<MwaDataSource>(MwaDataSource.new);
+  sl.registerLazySingleton<PhantomDeeplinkDataSource>(
+    () => PhantomDeeplinkDataSource(sessionStore: sl<PhantomSessionStore>()),
+  );
   sl.registerLazySingleton<TxPreflight>(TxPreflight.new);
   sl.registerLazySingleton<DevAirdropService>(
     () => DevAirdropService(sl<DioClient>()),
@@ -99,7 +105,12 @@ Future<void> configureDependencies() async {
     ),
   );
   sl.registerLazySingleton<WalletRepository>(
-    () => WalletRepository(sl<MwaDataSource>(), sl<AuthTokenStore>()),
+    () => WalletRepository(
+      sl<MwaDataSource>(),
+      sl<AuthTokenStore>(),
+      sl<PhantomDeeplinkDataSource>(),
+      sl<PhantomSessionStore>(),
+    ),
   );
 
   sl.registerLazySingleton<SignInWithSolana>(

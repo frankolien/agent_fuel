@@ -30,6 +30,8 @@ dependencies:
   local_auth: ^2.3.0
 
   app_links: ^6.3.0
+  url_launcher: ^6.3.0
+  pinenacl: ^0.6.0
 
   firebase_core: ^3.6.0
   firebase_messaging: ^15.1.3
