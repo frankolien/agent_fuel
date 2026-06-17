@@ -1,6 +1,20 @@
 import { NavLink } from "react-router-dom";
+import { useAuth } from "../../app/auth";
+import { useAgentsQuery, useVaultsQuery } from "../../lib/api/hooks";
+import { config } from "../../lib/config";
 import { CONSOLE_NAV } from "./nav";
 import { CaretDownIcon } from "./icons";
+
+function shortPubkey(pk: string): string {
+  return pk.length > 9 ? `${pk.slice(0, 4)}…${pk.slice(-4)}` : pk;
+}
+
+function initials(pk: string | null): string {
+  if (!pk) return "—";
+  // First two chars of the base58 pubkey — stable per-wallet, no PII risk
+  // since the pubkey is already public on chain.
+  return pk.slice(0, 2).toUpperCase();
+}
 
 type Props = {
   /** Mobile drawer state — ignored on `md+` where the sidebar is always docked. */
@@ -9,6 +23,18 @@ type Props = {
 };
 
 export function Sidebar({ open = false, onClose }: Props) {
+  const { walletPubkey } = useAuth();
+  const agents = useAgentsQuery();
+  const vaults = useVaultsQuery();
+
+  const agentCount = agents.data?.length;
+  const vaultCount = vaults.data?.length;
+  const countsLine =
+    agentCount === undefined || vaultCount === undefined
+      ? "—"
+      : `${agentCount} agent${agentCount === 1 ? "" : "s"} · ${vaultCount} vault${vaultCount === 1 ? "" : "s"}`;
+  const orgLabel = walletPubkey ? shortPubkey(walletPubkey) : "Not signed in";
+
   return (
     <>
       {/* Mobile-only backdrop. Click anywhere outside the drawer to dismiss. */}
@@ -45,18 +71,18 @@ export function Sidebar({ open = false, onClose }: Props) {
           </svg>
           <div className="leading-tight">
             <div className="text-sm font-semibold tracking-[-0.01em]">Agent Fuel</div>
-            <div className="font-mono text-[11px] text-muted">mainnet-beta</div>
+            <div className="font-mono text-[11px] text-muted">{config.solanaCluster}</div>
           </div>
         </div>
 
         <div className="rounded-[10px] border border-white/[0.09] bg-surface-2 px-2.5 py-2">
           <div className="grid grid-cols-[28px_1fr_12px] items-center gap-2">
             <div className="grid h-7 w-7 place-items-center rounded-md border border-white/[0.16] bg-surface-3 font-mono text-[11px] text-mint">
-              VR
+              {initials(walletPubkey)}
             </div>
             <div className="min-w-0">
-              <div className="text-[12.5px]">Vega Research</div>
-              <div className="text-[11px] text-muted">6 agents · 4 vaults</div>
+              <div className="truncate font-mono text-[12.5px]">{orgLabel}</div>
+              <div className="text-[11px] text-muted">{countsLine}</div>
             </div>
             <CaretDownIcon />
           </div>
